@@ -3,8 +3,8 @@
 0AMV 活筹指数增强回测 — 与基准 b2 策略对比
 
 规则:
-  - 0AMV单日涨>3% → 猛干模式: 止损放宽(entry_low*0.95), 仓位不变
-  - 0AMV单日跌>2.35% → 防守模式: 止损收紧(entry_low*0.99), 禁止买入, 不强制清仓
+  - 0AMV单日涨>3% → 猛干模式: 止损放宽(entry_low*0.95), 让利润奔跑
+  - 0AMV单日跌>2.35% → 防守模式: 止损收紧(entry_low*0.99), 正常买入(信号质量高)
   - 其余 → 基准模式（b2 默认参数）
 
 用法:
@@ -190,9 +190,7 @@ class OAMVSimEngine:
         return 1.0
 
     def can_buy_in_regime(self, regime):
-        """当前状态是否允许买入"""
-        if regime == "defensive":
-            return False  # 防守模式: 只卖不买
+        """当前状态是否允许买入 — 所有模式均允许（防御日信号质量反而高）"""
         return True
 
     def should_force_sell_defensive(self, pos, date, df):
@@ -416,9 +414,8 @@ class OAMVSimEngine:
 
             self.check_stops(date)
 
-            # 防守模式: 跳过买入
+            # 防守模式只收紧止损，不阻断买入（防御日信号质量反而高）
             if not self.can_buy_in_regime(regime):
-                # 只记录净值
                 total_value = self.calc_portfolio_value(date)
                 self.daily_values.append({
                     "date": date, "value": total_value,

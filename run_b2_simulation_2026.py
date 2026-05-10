@@ -127,14 +127,32 @@ class SimulationEngine:
             return float(df.loc[prev_dates[-1], price_type])
         return None
 
-    def scan_signals(self, min_vol_ratio=1.0):
+    def scan_signals(self, min_vol_ratio=1.0, code_allowlist=None,
+                     mktcap_df=None, mktcap_min=None, mktcap_max=None):
         """扫描所有股票在2026年的b2信号.
-           min_vol_ratio: 信号日量比底线 (<此值则过滤)"""
+           min_vol_ratio: 信号日量比底线 (<此值则过滤)
+           code_allowlist: 可选的白名单股票代码列表
+           mktcap_df: 月度市值快照 DataFrame (trade_date, symbol, mv_yi)
+           mktcap_min/max: 市值范围过滤 (亿元), 动态逐月筛选"""
         print("扫描 b2 入场信号 (2026)...", flush=True)
         all_signals = []
-        codes = sorted([f.replace('.csv', '') for f in os.listdir(DATA_DIR) if f.endswith('.csv')])
+        if code_allowlist is not None:
+            codes = code_allowlist
+        else:
+            codes = sorted([f.replace('.csv', '') for f in os.listdir(DATA_DIR) if f.endswith('.csv')])
         total = len(codes)
         t0 = time.time()
+
+        # Build monthly market cap lookup: (year_month_str, symbol) -> mv_yi
+        mktcap_lookup = {}
+        if mktcap_df is not None and mktcap_min is not None:
+            mktcap_df['ym'] = mktcap_df['trade_date'].astype(str).str[:7]
+            # Ensure symbol is zero-padded 6-digit string
+            mktcap_df['symbol_str'] = mktcap_df['symbol'].astype(str).str.zfill(6)
+            for _, r in mktcap_df.iterrows():
+                mktcap_lookup[(r['ym'], r['symbol_str'])] = r['mv_yi']
+            print(f"  动态市值过滤: {mktcap_min}-{mktcap_max}亿, "
+                  f"{mktcap_df['ym'].nunique()}个月快照", flush=True)
 
         for i, code in enumerate(codes):
             df = self.load_stock(code)
@@ -166,6 +184,13 @@ class SimulationEngine:
                     if min_vol_ratio > 1.0:
                         prev_vol = float(full_df.shift(1).loc[sd, 'volume']) if sd in full_df.shift(1).index else 0
                         if prev_vol > 0 and float(row['volume']) / prev_vol < min_vol_ratio:
+                            continue
+
+                    # 动态市值过滤: 按月快照检查是否在范围内
+                    if mktcap_lookup:
+                        ym = sd.strftime('%Y-%m')
+                        mv = mktcap_lookup.get((ym, code))
+                        if mv is None or mv < mktcap_min or mv > mktcap_max:
                             continue
 
                     weight = float(row.get('b2_position_weight', 1.0))
@@ -442,7 +467,8 @@ class SimulationEngine:
 
         return False  # 不调仓
 
-    def run(self, min_vol_ratio=1.0):
+    def run(self, min_vol_ratio=1.0, code_allowlist=None,
+            mktcap_df=None, mktcap_min=None, mktcap_max=None):
         """主模拟循环"""
         print("=" * 70)
         print(f"  b2 策略 2026年 T+1 模拟交易")
@@ -453,7 +479,9 @@ class SimulationEngine:
         print("=" * 70)
 
         # 1. Scan signals
-        signals = self.scan_signals(min_vol_ratio=min_vol_ratio)
+        signals = self.scan_signals(min_vol_ratio=min_vol_ratio, code_allowlist=code_allowlist,
+                                    mktcap_df=mktcap_df, mktcap_min=mktcap_min,
+                                    mktcap_max=mktcap_max)
         if not signals:
             print("未发现任何交易信号!")
             return
@@ -599,23 +627,37 @@ class SimulationEngine:
         if len(self.daily_values) > 1:
             vals = self.daily_values
             peak = max(v['value'] for v in vals)
-            peak_i = next(i for i, v in enumerate(vals) if v['value'] == peak)
-            dd = (vals[peak_i]['value'] - min(v['value'] for v in vals[peak_i:])) / vals[peak_i]['value'] * 100
 
-            # Simple returns
+            # 滚动最大回撤: 每个点相对历史最高点的最大跌幅
+            cummax = 0
+            max_dd = 0
+            for v in vals:
+                if v['value'] > cummax:
+                    cummax = v['value']
+                drawdown = (cummax - v['value']) / cummax * 100
+                if drawdown > max_dd:
+                    max_dd = drawdown
+
+            # 年化收益率 & 夏普比率
             rets = []
             for i in range(1, len(vals)):
                 rets.append(vals[i]['value'] / vals[i-1]['value'] - 1)
             if rets:
-                vol = np.std(rets) * np.sqrt(252) * 100
-                sharpe = (total_return / 100) / (vol / 100) if vol > 0 else 0
+                days = len(rets)
+                total_ret_decimal = vals[-1]['value'] / vals[0]['value'] - 1
+                ann_ret = (1 + total_ret_decimal) ** (252 / days) - 1
+                ann_vol = np.std(rets) * np.sqrt(252)
+                risk_free = 0.02
+                sharpe = (ann_ret - risk_free) / ann_vol if ann_vol > 0 else 0
             else:
-                vol = 0
+                ann_ret = 0
+                ann_vol = 0
                 sharpe = 0
 
             print(f"\n  风险指标:")
-            print(f"    峰值资金: {peak:,.0f}  最大回撤: {dd:.1f}%")
-            print(f"    年化波动率: {vol:.1f}%  夏普比率: {sharpe:.2f}")
+            print(f"    峰值资金: {peak:,.0f}  最大回撤: {max_dd:.1f}%")
+            print(f"    年化收益率: {ann_ret*100:.1f}%  年化波动率: {ann_vol*100:.1f}%")
+            print(f"    夏普比率: {sharpe:.2f}")
 
         # Export
         os.makedirs(OUT, exist_ok=True)
@@ -641,6 +683,7 @@ def parse_args():
                    help='信号日量比底线, >1.0可过滤弱信号 (推荐1.5)')
     p.add_argument('--dynamic-sizing', action='store_true',
                    help='启用动态仓位 (每盈利5万多1-2只持仓)')
+    p.add_argument('--allowlist', default=None, help='股票白名单文件路径')
     return p.parse_args()
 
 
@@ -648,6 +691,28 @@ def main():
     args = parse_args()
     global SUPER_WEIGHT_THRESHOLD
     SUPER_WEIGHT_THRESHOLD = args.super_threshold
+
+    # 动态市值过滤
+    mktcap_df = None
+    mktcap_min = mktcap_max = None
+    mktcap_path = os.path.join(OUT, "monthly_mktcap.csv")
+    if os.path.exists(mktcap_path):
+        mktcap_df = pd.read_csv(mktcap_path)
+        mktcap_min = getattr(args, 'mktcap_min', None) or 500
+        mktcap_max = getattr(args, 'mktcap_max', None) or 1000
+        print(f"动态市值过滤: {mktcap_min}-{mktcap_max}亿 "
+              f"({len(mktcap_df)}条, {mktcap_df['trade_date'].nunique()}个月)")
+
+    # 静态白名单（与动态过滤互斥）
+    allowlist = None
+    if mktcap_df is None:
+        allowlist_path = getattr(args, 'allowlist', None)
+        if not allowlist_path:
+            allowlist_path = os.path.join(OUT, "qualified_stocks.txt")
+        if os.path.exists(allowlist_path):
+            with open(allowlist_path) as f:
+                allowlist = [line.strip() for line in f if line.strip()]
+            print(f"加载白名单: {len(allowlist)} 只 ({os.path.basename(allowlist_path)})")
 
     engine = SimulationEngine(
         capital=args.capital,
@@ -657,7 +722,8 @@ def main():
         end_date=args.end,
         dynamic_sizing=args.dynamic_sizing,
     )
-    engine.run(min_vol_ratio=args.min_vol_ratio)
+    engine.run(min_vol_ratio=args.min_vol_ratio, code_allowlist=allowlist,
+               mktcap_df=mktcap_df, mktcap_min=mktcap_min, mktcap_max=mktcap_max)
 
 
 if __name__ == '__main__':
