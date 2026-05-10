@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+*.pyo
+.env
+output/
+*.parquet
+*.csv.gz
+.DS_Store
+_local_backup/
+/tmp/
+.claude/

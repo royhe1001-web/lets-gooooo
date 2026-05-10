@@ -1,0 +1,150 @@
+{
+  "rf_auc": 0.6272501843563341,
+  "rf_accuracy": 0.5928160131615026,
+  "n_samples": 36466,
+  "n_features": 76,
+  "positive_ratio": 0.2603795316184939,
+  "top_features": [
+    {
+      "feature": "vol_half_above_4d",
+      "b2_parameter": "",
+      "rf_importance": 0.057,
+      "mic_score": 1.0,
+      "combined_score": 0.5285
+    },
+    {
+      "feature": "volatility_5d",
+      "b2_parameter": "",
+      "rf_importance": 0.0282,
+      "mic_score": 0.7984,
+      "combined_score": 0.4133
+    },
+    {
+      "feature": "K_slope",
+      "b2_parameter": "K值变化率",
+      "rf_importance": 0.0276,
+      "mic_score": 0.7143,
+      "combined_score": 0.371
+    },
+    {
+      "feature": "J_slope",
+      "b2_parameter": "J值变化率",
+      "rf_importance": 0.0203,
+      "mic_score": 0.7216,
+      "combined_score": 0.371
+    },
+    {
+      "feature": "ret_1d",
+      "b2_parameter": "当日涨幅 >4%",
+      "rf_importance": 0.0253,
+      "mic_score": 0.6413,
+      "combined_score": 0.3333
+    },
+    {
+      "feature": "K_D_cross",
+      "b2_parameter": "K-D交叉",
+      "rf_importance": 0.0187,
+      "mic_score": 0.6059,
+      "combined_score": 0.3123
+    },
+    {
+      "feature": "vol_double",
+      "b2_parameter": "倍量柱",
+      "rf_importance": 0.0523,
+      "mic_score": 0.5049,
+      "combined_score": 0.2786
+    },
+    {
+      "feature": "D",
+      "b2_parameter": "",
+      "rf_importance": 0.0126,
+      "mic_score": 0.5385,
+      "combined_score": 0.2756
+    },
+    {
+      "feature": "brick_change",
+      "b2_parameter": "",
+      "rf_importance": 0.0203,
+      "mic_score": 0.5255,
+      "combined_score": 0.2729
+    },
+    {
+      "feature": "vol_ratio_5",
+      "b2_parameter": "5日均量比",
+      "rf_importance": 0.0249,
+      "mic_score": 0.4372,
+      "combined_score": 0.231
+    },
+    {
+      "feature": "close_yellow_ratio",
+      "b2_parameter": "收盘>黄线",
+      "rf_importance": 0.0132,
+      "mic_score": 0.4398,
+      "combined_score": 0.2265
+    },
+    {
+      "feature": "brick_red_streak",
+      "b2_parameter": "",
+      "rf_importance": 0.0045,
+      "mic_score": 0.4407,
+      "combined_score": 0.2226
+    },
+    {
+      "feature": "ma_5_20_cross",
+      "b2_parameter": "",
+      "rf_importance": 0.0003,
+      "mic_score": 0.4277,
+      "combined_score": 0.214
+    },
+    {
+      "feature": "lower_shadow",
+      "b2_parameter": "",
+      "rf_importance": 0.015,
+      "mic_score": 0.3931,
+      "combined_score": 0.2041
+    },
+    {
+      "feature": "BB_width",
+      "b2_parameter": "布林带宽度",
+      "rf_importance": 0.0119,
+      "mic_score": 0.3891,
+      "combined_score": 0.2005
+    },
+    {
+      "feature": "ma_60_bias",
+      "b2_parameter": "60日均线乖离",
+      "rf_importance": 0.0118,
+      "mic_score": 0.3886,
+      "combined_score": 0.2002
+    },
+    {
+      "feature": "brick_var6a",
+      "b2_parameter": "",
+      "rf_importance": 0.0103,
+      "mic_score": 0.3883,
+      "combined_score": 0.1993
+    },
+    {
+      "feature": "brick_val",
+      "b2_parameter": "砖型图值",
+      "rf_importance": 0.009,
+      "mic_score": 0.3883,
+      "combined_score": 0.1986
+    },
+    {
+      "feature": "volatility_20d",
+      "b2_parameter": "20日波动率",
+      "rf_importance": 0.0422,
+      "mic_score": 0.3469,
+      "combined_score": 0.1946
+    },
+    {
+      "feature": "brick_green_streak",
+      "b2_parameter": "",
+      "rf_importance": 0.0002,
+      "mic_score": 0.3706,
+      "combined_score": 0.1854
+    }
+  ],
+  "elapsed_seconds": 46.51245403289795
+}

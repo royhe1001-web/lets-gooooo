@@ -1,0 +1,253 @@
+{
+  "phase": "phase4_lightgbm_classifier",
+  "model": "LightGBM",
+  "params": {
+    "objective": "binary",
+    "metric": "auc",
+    "boosting_type": "gbdt",
+    "num_leaves": 31,
+    "max_depth": 6,
+    "learning_rate": 0.05,
+    "feature_fraction": 0.8,
+    "bagging_fraction": 0.8,
+    "bagging_freq": 5,
+    "min_data_in_leaf": 20,
+    "scale_pos_weight": 0.9668211431257976,
+    "lambda_l1": 0.1,
+    "lambda_l2": 0.1,
+    "verbose": -1,
+    "random_state": 42,
+    "num_threads": 8
+  },
+  "roc_auc": 0.5458,
+  "average_precision": 0.5342,
+  "accuracy": 0.537,
+  "precision_class1": 0.57,
+  "recall_class1": 0.1823,
+  "f1_class1": 0.2763,
+  "n_features": 44,
+  "n_train_signals": 29284,
+  "n_test_signals": 7322,
+  "train_positive_ratio": 0.5084,
+  "test_positive_ratio": 0.4847,
+  "simulation": {
+    "unfiltered": {
+      "trades": 7322,
+      "win_rate": 0.4847,
+      "mean_return": 0.004758
+    },
+    "lgbm_filtered": {
+      "trades": 1135,
+      "win_rate": 0.57,
+      "mean_return": 0.015706
+    },
+    "lgbm_high_conf": {
+      "trades": 8,
+      "win_rate": 0.75,
+      "mean_return": 0.101671
+    }
+  },
+  "top_features": [
+    {
+      "feature": "oamv_volatility_20d",
+      "gain": 7811,
+      "type": "OAMV"
+    },
+    {
+      "feature": "oamv_amount_ratio",
+      "gain": 3411,
+      "type": "OAMV"
+    },
+    {
+      "feature": "oamv_change_3d",
+      "gain": 2497,
+      "type": "OAMV"
+    },
+    {
+      "feature": "oamv_change_pct",
+      "gain": 2459,
+      "type": "OAMV"
+    },
+    {
+      "feature": "oamv_change_5d",
+      "gain": 1912,
+      "type": "OAMV"
+    },
+    {
+      "feature": "macd_dea",
+      "gain": 1762,
+      "type": "B2"
+    },
+    {
+      "feature": "macd_hist",
+      "gain": 1539,
+      "type": "B2"
+    },
+    {
+      "feature": "shadow_lower",
+      "gain": 1321,
+      "type": "B2"
+    },
+    {
+      "feature": "ret_20d",
+      "gain": 1286,
+      "type": "B2"
+    },
+    {
+      "feature": "white_yellow_distance",
+      "gain": 1155,
+      "type": "B2"
+    },
+    {
+      "feature": "brick_val",
+      "gain": 1125,
+      "type": "BRICK"
+    },
+    {
+      "feature": "pullback_10d",
+      "gain": 1099,
+      "type": "B2"
+    },
+    {
+      "feature": "volume_ratio_5d",
+      "gain": 1051,
+      "type": "B2"
+    },
+    {
+      "feature": "b2_position_weight",
+      "gain": 986,
+      "type": "B2"
+    },
+    {
+      "feature": "volume_ratio_20d",
+      "gain": 930,
+      "type": "B2"
+    },
+    {
+      "feature": "ret_5d",
+      "gain": 910,
+      "type": "B2"
+    },
+    {
+      "feature": "j_prev_diff",
+      "gain": 862,
+      "type": "B2"
+    },
+    {
+      "feature": "volume_ratio_1d",
+      "gain": 753,
+      "type": "B2"
+    },
+    {
+      "feature": "macd_hist_diff",
+      "gain": 689,
+      "type": "B2"
+    },
+    {
+      "feature": "ret_10d",
+      "gain": 653,
+      "type": "B2"
+    },
+    {
+      "feature": "d",
+      "gain": 627,
+      "type": "B2"
+    },
+    {
+      "feature": "gain_today",
+      "gain": 559,
+      "type": "B2"
+    },
+    {
+      "feature": "white_line",
+      "gain": 551,
+      "type": "B2"
+    },
+    {
+      "feature": "yellow_line",
+      "gain": 546,
+      "type": "B2"
+    },
+    {
+      "feature": "brick_red_streak",
+      "gain": 540,
+      "type": "BRICK"
+    },
+    {
+      "feature": "shadow_upper",
+      "gain": 535,
+      "type": "B2"
+    },
+    {
+      "feature": "j",
+      "gain": 483,
+      "type": "B2"
+    },
+    {
+      "feature": "gap_ratio",
+      "gain": 472,
+      "type": "B2"
+    },
+    {
+      "feature": "k",
+      "gain": 385,
+      "type": "B2"
+    },
+    {
+      "feature": "macd_dif",
+      "gain": 346,
+      "type": "B2"
+    },
+    {
+      "feature": "close_to_high_ratio",
+      "gain": 329,
+      "type": "B2"
+    },
+    {
+      "feature": "brick_green_streak",
+      "gain": 56,
+      "type": "BRICK"
+    },
+    {
+      "feature": "oamv_signal",
+      "gain": 55,
+      "type": "OAMV"
+    },
+    {
+      "feature": "oamv_is_normal",
+      "gain": 45,
+      "type": "OAMV"
+    },
+    {
+      "feature": "brick_rising",
+      "gain": 12,
+      "type": "BRICK"
+    },
+    {
+      "feature": "brick_green_to_red",
+      "gain": 8,
+      "type": "BRICK"
+    },
+    {
+      "feature": "b2_prior_strong",
+      "gain": 8,
+      "type": "B2"
+    },
+    {
+      "feature": "oamv_is_aggressive",
+      "gain": 7,
+      "type": "OAMV"
+    },
+    {
+      "feature": "white_above_yellow",
+      "gain": 0,
+      "type": "B2"
+    },
+    {
+      "feature": "close_above_yellow",
+      "gain": 0,
+      "type": "B2"
+    }
+  ],
+  "elapsed_seconds": 97.2643175125122
+}
