@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+output/cache/
+output/kline/
+output/*.pkl
+output/*.parquet
+output/strategy_model/
+.DS_Store
+.ipynb_checkpoints/
+*.egg-info/
