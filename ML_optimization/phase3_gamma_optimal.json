@@ -1,0 +1,130 @@
+{
+  "phase": "phase3_gamma_optimization",
+  "base_params": {
+    "j_prev_max": 20,
+    "gain_min": 0.04,
+    "j_today_max": 65,
+    "shadow_max": 0.035,
+    "j_today_loose": 70,
+    "shadow_loose": 0.045,
+    "prior_strong_ret": 0.2,
+    "weight_gain_2x_thresh": 0.09,
+    "weight_gain_2x": 2.5,
+    "weight_gap_thresh": 0.02,
+    "weight_gap_up": 1.5,
+    "weight_shrink": 1.2,
+    "weight_deep_shrink_ratio": 0.8,
+    "weight_deep_shrink": 1.3,
+    "weight_pullback_thresh": -0.05,
+    "weight_pullback": 1.2,
+    "weight_shadow_discount_thresh": 0.015,
+    "weight_shadow_discount": 0.7,
+    "weight_strong_discount": 0.8,
+    "weight_brick_resonance": 1.5,
+    "oamv_aggressive_buffer": 0.95,
+    "oamv_defensive_buffer": 0.99,
+    "oamv_defensive_ban_entry": true,
+    "oamv_aggressive_threshold": 3.0,
+    "oamv_defensive_threshold": -2.0
+  },
+  "n_stocks_sample": 300,
+  "optimization_results": [
+    {
+      "pair_name": "Explosive Quality (gain_2x_thresh x weight_gain_2x)",
+      "x_param": "weight_gain_2x_thresh",
+      "y_param": "weight_gain_2x",
+      "optimal_x": 0.06,
+      "optimal_y": 1.5,
+      "grid_best_x": 0.06,
+      "grid_best_y": 1.5,
+      "z_validated": 0.009529,
+      "z_grid_best": 0.009529,
+      "alpha": 0.0,
+      "beta": 0.0,
+      "gamma": 0.0001,
+      "delta": 0.0001,
+      "r_squared": 1.0,
+      "x_range": [
+        0.06,
+        0.12
+      ],
+      "y_range": [
+        1.5,
+        3.5
+      ]
+    },
+    {
+      "pair_name": "OAMV Regime Sensitivity (defensive_threshold x aggressive_threshold)",
+      "x_param": "oamv_defensive_threshold",
+      "y_param": "oamv_aggressive_threshold",
+      "optimal_x": -3.5,
+      "optimal_y": 2.0,
+      "grid_best_x": -3.5,
+      "grid_best_y": 2.0,
+      "z_validated": 0.009529,
+      "z_grid_best": 0.009529,
+      "alpha": 0.0,
+      "beta": 0.0,
+      "gamma": 0.0001,
+      "delta": 0.0001,
+      "r_squared": 1.0,
+      "x_range": [
+        -3.5,
+        -1.5
+      ],
+      "y_range": [
+        2.0,
+        5.0
+      ]
+    },
+    {
+      "pair_name": "Pullback Bonus (pullback_thresh x weight_pullback)",
+      "x_param": "weight_pullback_thresh",
+      "y_param": "weight_pullback",
+      "optimal_x": -0.12,
+      "optimal_y": 1.0,
+      "grid_best_x": -0.12,
+      "grid_best_y": 1.0,
+      "z_validated": 0.009529,
+      "z_grid_best": 0.009529,
+      "alpha": 0.0,
+      "beta": 0.0,
+      "gamma": 0.0001,
+      "delta": 0.0001,
+      "r_squared": 1.0,
+      "x_range": [
+        -0.12,
+        -0.03
+      ],
+      "y_range": [
+        1.0,
+        2.0
+      ]
+    },
+    {
+      "pair_name": "Entry Quality (gain_min x j_today_max)",
+      "x_param": "gain_min",
+      "y_param": "j_today_max",
+      "optimal_x": 0.07,
+      "optimal_y": 55.0,
+      "grid_best_x": 0.054,
+      "grid_best_y": 59.0,
+      "z_validated": -0.008312,
+      "z_grid_best": 0.015999,
+      "alpha": 21.938,
+      "beta": -0.711,
+      "gamma": 0.0001,
+      "delta": 0.0774,
+      "r_squared": 0.694,
+      "x_range": [
+        0.03,
+        0.07
+      ],
+      "y_range": [
+        55.0,
+        75.0
+      ]
+    }
+  ],
+  "elapsed_seconds": 4143.062876462936
+}
