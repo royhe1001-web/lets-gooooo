@@ -27,6 +27,7 @@ from quant_strategy.oamv import fetch_market_data, calc_oamv, generate_signals
 from quant_strategy.strategy_spring import generate_spring_signals
 from ML_optimization.mktcap_utils import (is_in_pct_range, check_liquidity,
                                            get_oamv_regime_range)
+from ML_optimization.sector_utils import preload_sector_data, get_sector_score
 
 FEAT_DIR = os.path.join(BASE, 'ML_optimization', 'features')
 OUT_DIR = os.path.join(BASE, 'ML_optimization')
@@ -60,7 +61,8 @@ class OAMVSimEngine:
     """Simulation engine with 0AMV market regime integration."""
 
     def __init__(self, stock_data, b2_params, oamv_df, oamv_params,
-                 mktcap_lookup=None, percentiles=None, enable_liquidity=False):
+                 mktcap_lookup=None, percentiles=None, enable_liquidity=False,
+                 sector_lookup=None):
         self.stock_data = stock_data
         self.b2_params = b2_params
         self.oamv_df = oamv_df.set_index('date')
@@ -76,10 +78,8 @@ class OAMVSimEngine:
         self.percentiles = percentiles        # from compute_mktcap_percentiles()
         self.enable_liquidity = enable_liquidity
 
-        # B+C+D filter support (Phase 1 validation)
-        self.mktcap_lookup = mktcap_lookup
-        self.percentiles = percentiles        # from compute_mktcap_percentiles()
-        self.enable_liquidity = enable_liquidity
+        # Sector momentum factor support
+        self.sector_lookup = sector_lookup  # {'stock_board_map': ..., 'board_momentum': ...}
 
         self.positions: Dict[str, Position] = {}
         self.closed_positions: List[Dict] = []
@@ -137,6 +137,13 @@ class OAMVSimEngine:
                 for idx in sdf.index:
                     regimes.append(self._get_oamv_regime(idx))
                 sdf['oamv_regime'] = regimes
+
+                # Embed sector momentum score (same pattern as OAMV regime)
+                if self.sector_lookup:
+                    stock_map = self.sector_lookup['stock_board_map']
+                    board_mom = self.sector_lookup['board_momentum']
+                    sector_scores = [get_sector_score(code, idx, stock_map, board_mom) for idx in sdf.index]
+                    sdf['sector_momentum_score'] = sector_scores
 
                 # Generate B2 signals with 0AMV-aware params
                 b2p = copy.deepcopy(self.b2_params)
@@ -569,7 +576,18 @@ def preload_data():
             print(f"    ... {i+1}/{len(feat_files)} ({time.time()-t0:.0f}s)")
 
     print(f"  Pre-loaded {len(stock_data)} stocks + 0AMV {len(oamv_df)} days ({time.time()-t0:.0f}s)")
-    return stock_data, oamv_df
+
+    # Sector momentum
+    print("  Loading sector momentum data...")
+    try:
+        sector_lookup = preload_sector_data(stock_data_dict=stock_data, start='20180101')
+        print(f"  Sector data: {len(sector_lookup.get('stock_board_map', {}))} stocks mapped, "
+              f"{len(sector_lookup.get('board_momentum', {}))} board-date scores")
+    except Exception as e:
+        print(f"  WARNING: Sector data load failed ({e}), continuing without sector factor")
+        sector_lookup = None
+
+    return stock_data, oamv_df, sector_lookup
 
 
 # ============================================================
@@ -587,6 +605,9 @@ EXPLOSIVE_B2 = {
     'weight_pullback': 1.2, 'weight_shadow_discount_thresh': 0.015,
     'weight_shadow_discount': 0.7, 'weight_strong_discount': 0.8,
     'weight_brick_resonance': 1.5,
+    'sector_momentum_enabled': True,
+    'sector_weight_strong': 1.15,
+    'sector_weight_weak': 0.85,
 }
 
 PULLBACK_B2 = {
@@ -689,6 +710,16 @@ def build_param_sets():
               'oamv_defensive_ban_entry': True})
     sets.append({'name': 'OAMV_Conservative', 'b2': copy.deepcopy(EXPLOSIVE_B2), 'oamv': o})
 
+    # 17-19: Sector momentum variants on Explosive B2
+    for s_strong, s_weak, s_tag in [(1.10, 0.90, 'SectorMild'),
+                                     (1.15, 0.85, 'SectorStd'),
+                                     (1.20, 0.80, 'SectorAggr')]:
+        b2 = copy.deepcopy(EXPLOSIVE_B2)
+        b2['sector_weight_strong'] = s_strong
+        b2['sector_weight_weak'] = s_weak
+        sets.append({'name': f'Explosive_{s_tag}', 'b2': b2,
+                     'oamv': copy.deepcopy(default_oamv)})
+
     return sets
 
 
@@ -696,7 +727,7 @@ def main():
     t0 = time.time()
 
     # 1. Preload
-    stock_data, oamv_df = preload_data()
+    stock_data, oamv_df, sector_lookup = preload_data()
 
     # 2. Build param sets
     param_sets = build_param_sets()
@@ -720,7 +751,8 @@ def main():
         else:
             oamv_params_use = oamv_params
 
-        engine = OAMVSimEngine(stock_data, b2_params, oamv_df, oamv_params_use)
+        engine = OAMVSimEngine(stock_data, b2_params, oamv_df, oamv_params_use,
+                               sector_lookup=sector_lookup)
         metrics = engine.run()
         elapsed = time.time() - t1
 

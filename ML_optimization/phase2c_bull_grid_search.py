@@ -13,10 +13,11 @@ Validation: 2025-07-01 ~ 2025-12-31
 Test:       2026-01-01 ~ 2026-05-07
 """
 
-import os, sys, time, json, copy
+import os, sys, time, json, copy, pickle
 import numpy as np
 import pandas as pd
 from concurrent.futures import ProcessPoolExecutor, as_completed
+import tempfile
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -30,6 +31,7 @@ from ML_optimization.mktcap_utils import (
 )
 from quant_strategy.oamv import fetch_market_data, calc_oamv, generate_signals as gen_oamv
 from strategy_spring import generate_spring_signals
+from ML_optimization.sector_utils import preload_sector_data, get_sector_score
 
 FEAT_DIR = os.path.join(BASE, 'ML_optimization', 'features')
 OUT_DIR = os.path.join(BASE, 'ML_optimization')
@@ -70,6 +72,9 @@ EXPLOSIVE_B2 = {
     'weight_pullback': 1.2, 'weight_shadow_discount_thresh': 0.015,
     'weight_shadow_discount': 0.7, 'weight_strong_discount': 0.8,
     'weight_brick_resonance': 1.5,
+    'sector_momentum_enabled': True,
+    'sector_weight_strong': 1.15,
+    'sector_weight_weak': 0.85,
 }
 DEFAULT_B2 = {**EXPLOSIVE_B2, 'weight_gain_2x_thresh': 0.07, 'weight_gain_2x': 2.0,
               'gain_min': 0.04, 'j_today_max': 65}
@@ -117,6 +122,17 @@ def build_param_sets():
               'oamv_defensive_threshold': -2.0, 'oamv_defensive_buffer': 1.0,
               'oamv_defensive_ban_entry': True})
     sets.append({'name': 'OAMV_Conservative', 'b2': copy.deepcopy(EXPLOSIVE_B2), 'oamv': o})
+
+    # Sector momentum variants on Explosive B2
+    for s_strong, s_weak, s_tag in [(1.10, 0.90, 'SectorMild'),
+                                     (1.15, 0.85, 'SectorStd'),
+                                     (1.20, 0.80, 'SectorAggr')]:
+        b2 = copy.deepcopy(EXPLOSIVE_B2)
+        b2['sector_weight_strong'] = s_strong
+        b2['sector_weight_weak'] = s_weak
+        sets.append({'name': f'Explosive_{s_tag}', 'b2': b2,
+                     'oamv': copy.deepcopy(DEFAULT_OAMV)})
+
     return sets
 
 
@@ -298,7 +314,7 @@ def is_in_any_period(idx, periods):
 
 def _eval_stock_chunk_bull(args):
     """Worker: evaluate ALL param sets on assigned stock chunk over bull periods."""
-    stock_files, oamv_change_map, param_sets, train_periods, worker_id = args
+    stock_files, oamv_change_map, param_sets, train_periods, worker_id, sector_lookup_path = args
 
     try:
         mktcap_lookup = build_mktcap_lookup()
@@ -306,6 +322,15 @@ def _eval_stock_chunk_bull(args):
     except Exception:
         mktcap_lookup = {}
         percentiles = {}
+
+    # Load sector data if available
+    sector_lookup = None
+    if sector_lookup_path and os.path.exists(sector_lookup_path):
+        try:
+            with open(sector_lookup_path, 'rb') as f:
+                sector_lookup = pickle.load(f)
+        except Exception:
+            pass
 
     stock_data = {}
     for f in stock_files:
@@ -342,6 +367,14 @@ def _eval_stock_chunk_bull(args):
                 regime = np.where(chg > agg_thresh, 'aggressive',
                          np.where(chg < def_thresh, 'defensive', 'normal'))
                 dc['oamv_regime'] = regime
+
+                # Embed sector momentum score
+                if sector_lookup:
+                    stock_map = sector_lookup['stock_board_map']
+                    board_mom = sector_lookup['board_momentum']
+                    sector_scores = [get_sector_score(code, idx, stock_map, board_mom) for idx in dc.index]
+                    dc['sector_momentum_score'] = sector_scores
+
                 sdf = generate_spring_signals(dc, board_type='main', precomputed=True, params=b2p)
 
                 # Filter to signals within ANY training period
@@ -372,7 +405,8 @@ def _eval_stock_chunk_bull(args):
     return results
 
 
-def stage1_fast_screen(stock_files, oamv_df, param_sets, train_periods, n_workers=0):
+def stage1_fast_screen(stock_files, oamv_df, param_sets, train_periods,
+                       sector_lookup_path=None, n_workers=0):
     """Fast T+5 screening on concatenated bull periods.
     If n_workers=0, runs sequentially in main process (safer, less memory).
     If n_workers>=2, uses ProcessPoolExecutor (faster but may OOM on Windows)."""
@@ -388,7 +422,7 @@ def stage1_fast_screen(stock_files, oamv_df, param_sets, train_periods, n_worker
         print(f"  Train periods: {[(s.date(), e.date()) for s, e in train_periods]}")
         print(f"  Param sets: {len(param_sets)}", flush=True)
         t0 = time.time()
-        all_results = _eval_stock_chunk_bull((stock_files, oamv_change_map, param_sets, train_periods, 0))
+        all_results = _eval_stock_chunk_bull((stock_files, oamv_change_map, param_sets, train_periods, 0, sector_lookup_path))
         elapsed = time.time() - t0
         print(f"  Sequential done ({elapsed:.0f}s, {len(all_results)} results)", flush=True)
     else:
@@ -401,7 +435,7 @@ def stage1_fast_screen(stock_files, oamv_df, param_sets, train_periods, n_worker
         t0 = time.time()
         all_results = []
         with ProcessPoolExecutor(max_workers=n_workers) as executor:
-            args_list = [(chunk, oamv_change_map, param_sets, train_periods, i)
+            args_list = [(chunk, oamv_change_map, param_sets, train_periods, i, sector_lookup_path)
                          for i, chunk in enumerate(chunks)]
             futures = {executor.submit(_eval_stock_chunk_bull, args): i
                        for i, args in enumerate(args_list)}
@@ -495,7 +529,8 @@ def _prepare_oamv_and_b2_params(param_set):
 
 def run_one_period(stock_data, b2_params, oamv_params, oamv_df,
                    period_start, period_end, stop_config,
-                   mktcap_lookup=None, percentiles=None):
+                   mktcap_lookup=None, percentiles=None,
+                   sector_lookup=None):
     """Run backtest on a single contiguous period."""
     p2c_mod.SIM_START = period_start
     p2c_mod.SIM_END = period_end
@@ -504,11 +539,13 @@ def run_one_period(stock_data, b2_params, oamv_params, oamv_df,
         engine = StopOptimEngine(stock_data, b2_params, oamv_df, oamv_params,
                                  stop_config=stop_config,
                                  mktcap_lookup=mktcap_lookup,
-                                 percentiles=percentiles)
+                                 percentiles=percentiles,
+                                 sector_lookup=sector_lookup)
     else:
         engine = p2c_mod.OAMVSimEngine(stock_data, b2_params, oamv_df, oamv_params,
                                        mktcap_lookup=mktcap_lookup,
-                                       percentiles=percentiles)
+                                       percentiles=percentiles,
+                                       sector_lookup=sector_lookup)
 
     metrics = engine.run()
     metrics['n_days'] = max(1, len([d for d in pd.date_range(period_start, period_end)
@@ -562,7 +599,7 @@ def aggregate_multi_period(period_results):
 
 def _run_grid_job(args_dict):
     """Subprocess entry for one (B2, Stop) combo across all training periods."""
-    import os, sys, json, copy
+    import os, sys, json, copy, pickle
     import pandas as pd
     import importlib.util
 
@@ -709,6 +746,16 @@ def _run_grid_job(args_dict):
     stop_config = json.loads(args_dict['stop_config_json']) if args_dict['stop_config_json'] else None
     periods = json.loads(args_dict['periods_json'])
 
+    # Load sector data if provided
+    sector_lookup = None
+    sector_lookup_path = args_dict.get('sector_lookup_path')
+    if sector_lookup_path and os.path.exists(sector_lookup_path):
+        try:
+            with open(sector_lookup_path, 'rb') as f:
+                sector_lookup = pickle.load(f)
+        except Exception:
+            pass
+
     # Load mktcap data for percentile filtering
     try:
         mktcap_lookup = build_mktcap_lookup()
@@ -728,11 +775,13 @@ def _run_grid_job(args_dict):
             engine = StopEng(stock_data, b2_params, oamv_df, oamv_params,
                            stop_config=stop_config,
                            mktcap_lookup=mktcap_lookup,
-                           percentiles=percentiles)
+                           percentiles=percentiles,
+                           sector_lookup=sector_lookup)
         else:
             engine = p2c.OAMVSimEngine(stock_data, b2_params, oamv_df, oamv_params,
                                        mktcap_lookup=mktcap_lookup,
-                                       percentiles=percentiles)
+                                       percentiles=percentiles,
+                                       sector_lookup=sector_lookup)
 
         metrics = engine.run()
         metrics['n_days'] = max(1, len(pd.date_range(p_start, p_end, freq='B')))
@@ -776,7 +825,7 @@ def _run_grid_job(args_dict):
 
 
 def stage2_train_grid(param_sets, stop_profiles, stock_data_paths, oamv_df_path,
-                      train_periods, n_workers=4):
+                      train_periods, sector_lookup_path=None, n_workers=4):
     """Full backtest grid: N B2 combos x 4 stop profiles x 3 periods. Parallel."""
     combos = []
     for ps in param_sets:
@@ -808,6 +857,7 @@ def stage2_train_grid(param_sets, stop_profiles, stock_data_paths, oamv_df_path,
                 'stock_data_json': stock_data_json,
                 'oamv_path': oamv_df_path,
                 'periods_json': periods_json,
+                'sector_lookup_path': sector_lookup_path,
             }
             try:
                 r = _run_grid_job(args_dict)
@@ -830,6 +880,7 @@ def stage2_train_grid(param_sets, stop_profiles, stock_data_paths, oamv_df_path,
                     'stock_data_json': stock_data_json,
                     'oamv_path': oamv_df_path,
                     'periods_json': periods_json,
+                    'sector_lookup_path': sector_lookup_path,
                 }
                 futures[executor.submit(_run_grid_job, args_dict)] = i
 
@@ -857,7 +908,8 @@ def stage2_train_grid(param_sets, stop_profiles, stock_data_paths, oamv_df_path,
 # ============================================================
 def run_val_or_test(stock_data, b2_params, oamv_params, oamv_df,
                     start, end, stop_config, label,
-                    mktcap_lookup=None, percentiles=None):
+                    mktcap_lookup=None, percentiles=None,
+                    sector_lookup=None):
     """Run a single backtest on Val or Test period."""
     p2c_mod.SIM_START = start
     p2c_mod.SIM_END = end
@@ -866,11 +918,13 @@ def run_val_or_test(stock_data, b2_params, oamv_params, oamv_df,
         engine = StopOptimEngine(stock_data, b2_params, oamv_df, oamv_params,
                                  stop_config=stop_config,
                                  mktcap_lookup=mktcap_lookup,
-                                 percentiles=percentiles)
+                                 percentiles=percentiles,
+                                 sector_lookup=sector_lookup)
     else:
         engine = p2c_mod.OAMVSimEngine(stock_data, b2_params, oamv_df, oamv_params,
                                        mktcap_lookup=mktcap_lookup,
-                                       percentiles=percentiles)
+                                       percentiles=percentiles,
+                                       sector_lookup=sector_lookup)
 
     metrics = engine.run()
 
@@ -910,6 +964,11 @@ def main():
     mktcap_lookup = build_mktcap_lookup()
     percentiles = compute_mktcap_percentiles()
 
+    # Load sector momentum data
+    print("  Loading sector momentum data...")
+    # Note: sector_lookup is loaded later in Stage 2 after stock_data is available
+    sector_lookup = None  # placeholder, loaded with stock data later
+
     # Get stock files
     all_files = _get_stock_files_mainboard()
     print(f"  Main board stocks: {len(all_files)}")
@@ -926,16 +985,35 @@ def main():
     eligible_codes.update(codes_val)
     print(f"  Eligible codes (percentile, aggressive prefilter): {len(eligible_codes)}")
 
-    # Save OAMV to pickle for subprocess reuse
-    import tempfile, pickle
+    # ---- Preload stock data (needed for sector index synthesis) ----
+    print("  Preloading stock data for sector indices...")
+    stock_data = preload_stock_data(eligible_codes)
+
+    # ---- Load sector data with stock data ----
+    try:
+        sector_lookup = preload_sector_data(stock_data_dict=stock_data, start='20100101')
+        print(f"  Sector data: {len(sector_lookup.get('stock_board_map', {}))} stocks mapped, "
+              f"{len(sector_lookup.get('board_momentum', {}))} board-date scores")
+    except Exception as e:
+        print(f"  WARNING: Sector data load failed ({e}), continuing without sector factor")
+        sector_lookup = None
+
+    # Save OAMV and sector to pickle for subprocess reuse
     oamv_tmp = os.path.join(tempfile.gettempdir(), 'bull_grid_oamv.pkl')
     oamv_df.to_pickle(oamv_tmp)
+
+    sector_tmp = None
+    if sector_lookup:
+        sector_tmp = os.path.join(tempfile.gettempdir(), 'bull_grid_sector.pkl')
+        with open(sector_tmp, 'wb') as f:
+            pickle.dump(sector_lookup, f)
 
     # ---- Stage 1: Fast Screening ----
     print(f"\n[1/4] Stage 1: Fast T+4 Screening on Bull Periods")
     print("-" * 60)
     param_sets = build_param_sets()
-    stage1_results = stage1_fast_screen(all_files, oamv_df, param_sets, TRAIN_PERIODS, n_workers=4)
+    stage1_results = stage1_fast_screen(all_files, oamv_df, param_sets, TRAIN_PERIODS,
+                                        sector_lookup_path=sector_tmp, n_workers=4)
     top5 = stage1_results[:5]
 
     print(f"\n  Top-5 B2 combos:")
@@ -946,8 +1024,7 @@ def main():
     print(f"\n[2/4] Stage 2: Full Backtest Grid ({len(top5)} B2 x {len(STOP_PROFILES)} Stop Profiles)")
     print("-" * 60)
 
-    # Preload stock data for main process (used in Stage 3-4)
-    stock_data = preload_stock_data(eligible_codes)
+    # stock_data already loaded earlier (needed for sector index synthesis)
 
     # Build stock_data_paths dict for subprocess use
     stock_data_paths = {}
@@ -961,7 +1038,8 @@ def main():
     top5_param_sets = [ps for ps in param_sets if ps['name'] in top5_names]
 
     grid_results = stage2_train_grid(top5_param_sets, STOP_PROFILES, stock_data_paths,
-                                     oamv_tmp, TRAIN_PERIODS, n_workers=4)
+                                     oamv_tmp, TRAIN_PERIODS,
+                                     sector_lookup_path=sector_tmp, n_workers=4)
 
     print(f"\n  Top-5 Train (Aggregate) Results:")
     for i, r in enumerate(grid_results[:5]):
@@ -983,7 +1061,8 @@ def main():
                            VAL_START, VAL_END, sp,
                            f"{r['b2_name']}+{r['stop_profile']}",
                            mktcap_lookup=mktcap_lookup,
-                           percentiles=percentiles)
+                           percentiles=percentiles,
+                           sector_lookup=sector_lookup)
         m['b2_name'] = r['b2_name']
         m['stop_profile'] = r['stop_profile']
         val_results.append(m)
@@ -1009,7 +1088,8 @@ def main():
                                 TEST_START, TEST_END, best_stop,
                                 f"{best_val['b2_name']}+{best_val['stop_profile']}",
                                 mktcap_lookup=mktcap_lookup,
-                                percentiles=percentiles)
+                                percentiles=percentiles,
+                                sector_lookup=sector_lookup)
 
     # Test Explosive_def2.0 + None (baseline)
     exp_ps = next(ps for ps in param_sets if ps['name'] == 'Explosive_def2.0')
@@ -1017,14 +1097,16 @@ def main():
     test_orig = run_val_or_test(stock_data, exp_b2, exp_oamv, oamv_df,
                                 TEST_START, TEST_END, None, 'Explosive_def2.0+None',
                                 mktcap_lookup=mktcap_lookup,
-                                percentiles=percentiles)
+                                percentiles=percentiles,
+                                sector_lookup=sector_lookup)
 
     # Test Explosive_def2.0 + Tight (old best stop)
     test_old_best = run_val_or_test(stock_data, exp_b2, exp_oamv, oamv_df,
                                     TEST_START, TEST_END, STOP_PROFILES['Tight'],
                                     'Explosive_def2.0+Tight',
                                     mktcap_lookup=mktcap_lookup,
-                                    percentiles=percentiles)
+                                    percentiles=percentiles,
+                                    sector_lookup=sector_lookup)
 
     print(f"\n  {'Config':<35s} {'Return':>10s} {'Sharpe':>8s} {'WR':>8s} {'MaxDD':>8s} {'Trades':>8s}")
     print(f"  {'-'*80}")
@@ -1070,6 +1152,11 @@ def main():
         os.remove(oamv_tmp)
     except Exception:
         pass
+    if sector_tmp:
+        try:
+            os.remove(sector_tmp)
+        except Exception:
+            pass
 
 
 if __name__ == '__main__':

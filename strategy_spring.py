@@ -58,6 +58,10 @@ def generate_spring_signals(df: pd.DataFrame,
       weight_shadow_discount_thresh, weight_shadow_discount,
       weight_strong_discount, weight_brick_resonance,
       weight_cap                 : 权重上限 (默认 5.0)
+      # 板块动量因子 (sector momentum)
+      sector_momentum_enabled   : 板块动量开关 (默认 True)
+      sector_weight_strong      : 强板块乘数 (默认 1.15)
+      sector_weight_weak        : 弱板块乘数 (默认 0.85)
       # 0AMV 市场状态 (活筹指数)
       oamv_aggressive_buffer    : 猛干模式止损缓冲 (默认 0.95)
       oamv_normal_buffer        : 普通模式止损缓冲 (默认 0.97)
@@ -206,6 +210,17 @@ def generate_spring_signals(df: pd.DataFrame,
         df['b2_brick_resonance'] = brick_resonance.astype(int)
     else:
         df['b2_brick_resonance'] = 0
+
+    # 板块动量因子: 强板块→加成, 弱板块→折价
+    # sector_momentum_score 列由引擎预先嵌入, 值域 [0, 1], 0.5=中性
+    if p.get('sector_momentum_enabled', True) and 'sector_momentum_score' in df.columns:
+        sector_strong = p.get('sector_weight_strong', 1.15)
+        sector_weak = p.get('sector_weight_weak', 0.85)
+        score = df['sector_momentum_score'].values
+        sector_mult = sector_weak + (sector_strong - sector_weak) * score
+        sector_mult = np.clip(sector_mult, sector_weak, sector_strong)
+        df['b2_position_weight'] = df['b2_position_weight'] * sector_mult
+        df['b2_sector_score'] = df['sector_momentum_score']
 
     # 权重上限: 防止单信号过度集中 (默认5x)
     weight_cap = p.get('weight_cap', 5.0)
