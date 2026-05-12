@@ -76,6 +76,11 @@ class OAMVSimEngine:
         self.percentiles = percentiles        # from compute_mktcap_percentiles()
         self.enable_liquidity = enable_liquidity
 
+        # B+C+D filter support (Phase 1 validation)
+        self.mktcap_lookup = mktcap_lookup
+        self.percentiles = percentiles        # from compute_mktcap_percentiles()
+        self.enable_liquidity = enable_liquidity
+
         self.positions: Dict[str, Position] = {}
         self.closed_positions: List[Dict] = []
         self.daily_values: List[Dict] = []
