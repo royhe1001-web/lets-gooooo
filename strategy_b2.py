@@ -8,16 +8,18 @@
   案例: 002987, 920039, 688170, 300418, 601778, 688787, 002345, 688202, 688318, 920748
   T+5 胜率 100% | T+5 均值 +24.7% | 最大收益均值 +75.2%
 
-优化项（ML Phase 1-5 驱动，2026-05）:
-  1. 动态阈值: 按 OAMV regime 区分入场门槛 (Phase 5, Sharpe +0.722)
-  2. J当日阈值: 普通55/猛干65/防守55 (Phase 5 网格最优)
-  3. 涨幅门槛: 普通6%/猛干4%/防守6% (Phase 5 网格最优)
-  4. 上影线: 普通3.0%/猛干4.0%/防守2.5% + 降级权重×0.7
-  5. 回调深度: 前10日回调>5%→权重×1.2
-  6. 深度缩量: 前日量<20日均量80%→权重×1.3
-  7. 共振加分: b2∩砖型图CC信号→权重×1.5
-  8. OAMV 市场状态: 防守禁止开仓, 动态止损缓冲
-  9. LightGBM 信号过滤: AUC=0.546, 胜率+8.5pp (Phase 4)
+优化项（ML Phase 1-5 + Phase 2c 多牛市网格搜索，2026-05）:
+  1. B2+OAMV联合优化: Pullback+OAMV 三段牛市网格搜索最优 (Test +28.3%, Sharpe 0.728)
+  2. 入场门槛: gain_min=4%, j_today_max=65 (放宽信号捕捉更多机会)
+  3. 回调权重: 前10日回调>7%→权重×1.5 (超卖深度确认增强)
+  4. 涨幅2x: gain>7%→权重×2.0 (适度加成)
+  5. 止损策略: 原始引擎(None) — 牛市中让利润奔跑，不用改进止损
+  6. 动态阈值: 按 OAMV regime 区分入场门槛 (Phase 5, Sharpe +0.722)
+  7. 上影线: 普通3.0%/猛干4.0%/防守2.5% + 降级权重×0.7
+  8. 深度缩量: 前日量<20日均量80%→权重×1.3
+  9. 共振加分: b2∩砖型图CC信号→权重×1.5
+  10. OAMV 市场状态: 防守禁止开仓, 动态止损缓冲
+  11. LightGBM 信号过滤: AUC=0.546, 胜率+8.5pp (Phase 4)
 
 入场条件（7项 + 动态OAMV阈值）:
   前日 J<20 | 当日涨>动态阈值 | J<动态阈值 | 放量 | 上影线<动态阈值 | 白>黄 | 收>黄
@@ -119,8 +121,8 @@ def generate_b2_signals(df: pd.DataFrame,
         effective_j_max = pd.Series(j_max_arr, index=df.index)
         effective_shad_max = pd.Series(shad_arr, index=df.index)
     else:
-        effective_gain_min = p.get('gain_min', 0.054)
-        effective_j_max = p.get('j_today_max', 59)
+        effective_gain_min = p.get('gain_min', 0.04)
+        effective_j_max = p.get('j_today_max', 65)
         effective_shad_max = p.get('shadow_max', 0.035)
 
     # 标准阈值
@@ -165,9 +167,9 @@ def generate_b2_signals(df: pd.DataFrame,
     deep_shrink = df['volume'].shift(1) < vol_20_avg * deep_shrink_ratio
     df.loc[deep_shrink, 'b2_position_weight'] *= deep_shrink_mult
 
-    # 前10日回调>5%→1.2x (超卖深度确认)
-    pullback_thresh = p.get('weight_pullback_thresh', -0.05)
-    pullback_mult = p.get('weight_pullback', 1.2)
+    # 前10日回调>7%→1.5x (超卖深度确认，优化自Pullback+OAMV)
+    pullback_thresh = p.get('weight_pullback_thresh', -0.07)
+    pullback_mult = p.get('weight_pullback', 1.5)
     lookback = 10
     hh10 = df['close'].rolling(lookback).max().shift(1)
     pullback = (df['close'].shift(1) / hh10 - 1)
