@@ -1,0 +1,162 @@
+{
+  "phase": "5_dynamic_thresholds",
+  "date_splits": {
+    "train": "2024-01-01~2025-09-30",
+    "val": "2025-10-01~2025-12-31",
+    "test": "2026-01-01~2026-05-07"
+  },
+  "n_stocks_train": 753,
+  "n_stocks_test": 753,
+  "baseline": {
+    "fixed_train_z": 0.016221,
+    "fixed_val_z": 0.018475,
+    "fixed_test_sharpe": -0.0081,
+    "fixed_test_return_pct": -0.32,
+    "fixed_test_win_rate": 0.2796,
+    "fixed_test_trades": 93
+  },
+  "grid_top10": [
+    {
+      "rank": 1,
+      "name": "agg_tight+norm_tight+def_tight",
+      "z_train": 0.020824,
+      "n_signals": 405,
+      "agg_profile": "agg_tight",
+      "norm_profile": "norm_tight",
+      "def_profile": "def_tight"
+    },
+    {
+      "rank": 2,
+      "name": "agg_medium+norm_tight+def_tight",
+      "z_train": 0.019552,
+      "n_signals": 490,
+      "agg_profile": "agg_medium",
+      "norm_profile": "norm_tight",
+      "def_profile": "def_tight"
+    },
+    {
+      "rank": 3,
+      "name": "agg_tight+norm_tight+def_medium",
+      "z_train": 0.01885,
+      "n_signals": 423,
+      "agg_profile": "agg_tight",
+      "norm_profile": "norm_tight",
+      "def_profile": "def_medium"
+    },
+    {
+      "rank": 4,
+      "name": "agg_loose+norm_tight+def_tight",
+      "z_train": 0.018817,
+      "n_signals": 622,
+      "agg_profile": "agg_loose",
+      "norm_profile": "norm_tight",
+      "def_profile": "def_tight"
+    },
+    {
+      "rank": 5,
+      "name": "agg_tight+norm_medium+def_tight",
+      "z_train": 0.018308,
+      "n_signals": 520,
+      "agg_profile": "agg_tight",
+      "norm_profile": "norm_medium",
+      "def_profile": "def_tight"
+    },
+    {
+      "rank": 6,
+      "name": "agg_medium+norm_tight+def_medium",
+      "z_train": 0.017854,
+      "n_signals": 508,
+      "agg_profile": "agg_medium",
+      "norm_profile": "norm_tight",
+      "def_profile": "def_medium"
+    },
+    {
+      "rank": 7,
+      "name": "agg_medium+norm_medium+def_tight",
+      "z_train": 0.017504,
+      "n_signals": 605,
+      "agg_profile": "agg_medium",
+      "norm_profile": "norm_medium",
+      "def_profile": "def_tight"
+    },
+    {
+      "rank": 8,
+      "name": "agg_loose+norm_tight+def_medium",
+      "z_train": 0.017416,
+      "n_signals": 640,
+      "agg_profile": "agg_loose",
+      "norm_profile": "norm_tight",
+      "def_profile": "def_medium"
+    },
+    {
+      "rank": 9,
+      "name": "agg_tight+norm_tight+def_loose",
+      "z_train": 0.017168,
+      "n_signals": 453,
+      "agg_profile": "agg_tight",
+      "norm_profile": "norm_tight",
+      "def_profile": "def_loose"
+    },
+    {
+      "rank": 10,
+      "name": "agg_loose+norm_medium+def_tight",
+      "z_train": 0.017168,
+      "n_signals": 737,
+      "agg_profile": "agg_loose",
+      "norm_profile": "norm_medium",
+      "def_profile": "def_tight"
+    }
+  ],
+  "validation_top5": [
+    {
+      "name": "agg_tight+norm_tight+def_medium",
+      "z_val": 0.024768,
+      "val_delta_pct": 34.06
+    },
+    {
+      "name": "agg_tight+norm_tight+def_tight",
+      "z_val": 0.02474,
+      "val_delta_pct": 33.91
+    },
+    {
+      "name": "agg_medium+norm_tight+def_tight",
+      "z_val": 0.02474,
+      "val_delta_pct": 33.91
+    },
+    {
+      "name": "agg_loose+norm_tight+def_tight",
+      "z_val": 0.02474,
+      "val_delta_pct": 33.91
+    },
+    {
+      "name": "agg_tight+norm_medium+def_tight",
+      "z_val": 0.018203,
+      "val_delta_pct": -1.47
+    }
+  ],
+  "best_dynamic": {
+    "name": "agg_tight+norm_tight+def_medium",
+    "test_sharpe": 0.36,
+    "test_return_pct": 15.55,
+    "test_win_rate": 0.2297,
+    "test_trades": 74,
+    "per_regime_params": {
+      "aggressive": {
+        "gain_min_aggressive": 0.05,
+        "j_today_max_aggressive": 60,
+        "shadow_max_aggressive": 0.035
+      },
+      "normal": {
+        "gain_min_normal": 0.06,
+        "j_today_max_normal": 55,
+        "shadow_max_normal": 0.03
+      },
+      "defensive": {
+        "gain_min_defensive": 0.06,
+        "j_today_max_defensive": 55,
+        "shadow_max_defensive": 0.025
+      }
+    }
+  },
+  "elapsed_seconds": 2104.80152964592
+}

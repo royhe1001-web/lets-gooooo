@@ -1,0 +1,135 @@
+{
+  "phase": "final_comparison",
+  "date": "2026-05-11",
+  "test_period": "2026-01-01 ~ 2026-05-07",
+
+  "new_training_window_2023_2025": {
+    "rationale": "2024年中国证券市场发生重大变化(新国九条、量化监管等)，将训练集缩短至2023-2025以反映当前市场结构",
+    "train": "2023-01-01 ~ 2024-12-31",
+    "val": "2025-01-01 ~ 2025-12-31",
+    "test": "2026-01-01 ~ 2026-05-07",
+
+    "phase2c_explosive_def2": {
+      "description": "Phase 2c 主板+500-1000亿市值过滤 固定阈值",
+      "train_z": 0.001264,
+      "val_return_pct": 51.41,
+      "val_sharpe": 1.0627,
+      "val_win_rate": 0.2737,
+      "val_trades": 95,
+      "test_return_pct": 17.06,
+      "test_sharpe": 0.5544,
+      "test_win_rate": 0.2877,
+      "test_max_dd": 0.0196,
+      "test_trades": 73,
+      "note": "与14年训练窗口结果完全一致，参数Explosive_def2.0极度稳健"
+    },
+
+    "phase5_dynamic_thresholds": {
+      "fixed_baseline": {
+        "test_return_pct": -0.32,
+        "test_sharpe": -0.0081,
+        "test_win_rate": 0.2796,
+        "test_trades": 93
+      },
+      "best_dynamic_val_selected": {
+        "name": "agg_tight+norm_tight+def_tight",
+        "val_z": 0.03371,
+        "val_delta_pct_vs_base": 28.01,
+        "test_return_pct": 16.56,
+        "test_sharpe": 0.38,
+        "test_win_rate": 0.2329,
+        "test_trades": 73,
+        "per_regime_params": {
+          "aggressive": {"gain_min": 0.05, "j_today_max": 60, "shadow_max": 0.035},
+          "normal": {"gain_min": 0.06, "j_today_max": 55, "shadow_max": 0.03},
+          "defensive": {"gain_min": 0.07, "j_today_max": 50, "shadow_max": 0.02}
+        }
+      },
+      "key_change_from_old": "Aggressive从loose(0.03/70/0.05)变为tight(0.05/60/0.035)，反映2023-2025熊市中需更严格入场",
+      "delta_sharpe_vs_fixed": 0.388,
+      "delta_return_vs_fixed": 16.88
+    },
+
+    "phase4_lightgbm": {
+      "roc_auc": 0.6174,
+      "average_precision": 0.5765,
+      "n_features": 48,
+      "n_train_signals": 9357,
+      "n_test_signals": 376,
+      "mktcap_yi_rank": 7,
+      "mktcap_yi_gain": 467,
+      "top3_features": ["oamv_volatility_20d", "oamv_change_pct", "oamv_change_3d"],
+      "simulation": {
+        "unfiltered": {"trades": 376, "win_rate": 0.4707, "mean_return_pct": 0.491},
+        "lgbm_filtered": {"trades": 133, "win_rate": 0.5639, "mean_return_pct": 1.127},
+        "lgbm_high_conf": {"trades": 0, "win_rate": 0, "mean_return_pct": 0}
+      },
+      "key_improvement": "AUC从0.5794提升至0.6174，mktcap_yi重要性从#16跃升至#7"
+    }
+  },
+
+  "old_training_window_2010_2023": {
+    "train": "2010-01-01 ~ 2023-12-31",
+    "val": "2024-01-01 ~ 2025-12-31",
+    "test": "2026-01-01 ~ 2026-05-07",
+
+    "v3_mainboard_mktcap_fixed": {
+      "description": "主板+市值过滤 固定阈值 (Phase 2c Main Board)",
+      "stock_pool": "主板 2193只 → 过滤后 ~160只/月",
+      "filter": "500-1000亿 动态per-signal",
+      "threshold": "固定 (Explosive_def2.0)",
+      "test_return_pct": 17.1,
+      "test_sharpe": 0.554,
+      "test_win_rate": 28.8,
+      "test_trades": 73,
+      "test_max_dd": 2.0
+    },
+    "v4_mainboard_mktcap_dynamic": {
+      "description": "主板+市值过滤 动态阈值 (Phase 5 with mktcap filter)",
+      "stock_pool": "主板 → 过滤后 753只",
+      "filter": "500-1000亿 动态per-signal",
+      "threshold": "Per-regime 动态 (agg_loose+norm_tight+def_tight)",
+      "test_return_pct": 45.9,
+      "test_sharpe": 1.153,
+      "test_win_rate": 28.2,
+      "test_trades": 71,
+      "per_regime_params": {
+        "aggressive": {"gain_min": 0.03, "j_today_max": 70, "shadow_max": 0.05},
+        "normal": {"gain_min": 0.06, "j_today_max": 55, "shadow_max": 0.03},
+        "defensive": {"gain_min": 0.07, "j_today_max": 50, "shadow_max": 0.02}
+      }
+    }
+  },
+
+  "comparison_old_vs_new": {
+    "phase2c_test_2026": {
+      "old_14yr_train": "+17.1%, Sharpe 0.554",
+      "new_2yr_train": "+17.1%, Sharpe 0.554",
+      "conclusion": "参数完全一致，Explosive_def2.0极度稳健"
+    },
+    "phase5_test_2026": {
+      "old_14yr_train": "+45.9%, Sharpe 1.153 (agg_loose+norm_tight+def_tight)",
+      "new_2yr_train": "+16.6%, Sharpe 0.380 (agg_tight+norm_tight+def_tight)",
+      "conclusion": "旧结果+45.9%可能过拟合长训练期；新窗口给出更保守、更现实的估计"
+    },
+    "phase4_auc": {
+      "old_split_train_le_2023": "0.5794",
+      "new_split_train_le_2025": "0.6174",
+      "conclusion": "更多近期训练数据提升了模型区分能力"
+    },
+    "aggressive_regime_shift": {
+      "old": "agg_loose: gain_min=0.03, j_today_max=70, shadow_max=0.05 (牛市宽松)",
+      "new": "agg_tight: gain_min=0.05, j_today_max=60, shadow_max=0.035 (熊市收紧)",
+      "conclusion": "2023-2024训练期处于熊市，Aggressive信号稀少且质低，需收紧过滤"
+    }
+  },
+
+  "key_findings": {
+    "best_config_overall": "Phase 2c Explosive_def2.0 (固定阈值) — 两个训练窗口完全一致，最稳健",
+    "dynamic_threshold_benefit": "动态阈值仍优于固定(Dynamic +16.6% vs Fixed -0.3%)，但幅度远小于旧训练窗口",
+    "training_window_impact": "缩短训练窗口使Phase 5估计更保守(+16.6% vs +45.9%)，更符合实际预期",
+    "market_regime_matters": "Aggressive阈值从loose→tight是最显著变化，反映训练期内市场风格",
+    "mktcap_importance_rising": "市值特征在近期训练窗口中重要性显著上升(rank #16→#7)",
+    "lightgbm_improving": "Phase 4 AUC随训练窗口更新而提升(0.5794→0.6174)，更多近期数据=更好预测"
+  }
+}

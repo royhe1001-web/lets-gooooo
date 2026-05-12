@@ -25,6 +25,7 @@ BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BASE)
 
 from quant_strategy.oamv import fetch_market_data, calc_oamv, generate_signals
+from ML_optimization.mktcap_utils import build_mktcap_lookup
 
 FEAT_DIR = os.path.join(BASE, 'ML_optimization', 'features')
 OUT_DIR = os.path.join(BASE, 'ML_optimization')
@@ -152,6 +153,11 @@ def main():
     # Step 1: Compute 0AMV
     oamv_df = compute_oamv_features()
 
+    # Load market cap lookup
+    print("  Loading market cap lookup...")
+    mktcap_lookup = build_mktcap_lookup()
+    print(f"  Market cap lookup: {len(mktcap_lookup)} entries")
+
     # Step 2: Load feature files + extract signals with 0AMV
     feature_files = sorted([f for f in os.listdir(FEAT_DIR) if f.endswith('.parquet')])
     print(f"\n  Extracting B2 signals + 0AMV features from {len(feature_files)} stocks...")
@@ -174,10 +180,13 @@ def main():
         n_done = 0
         with ProcessPoolExecutor(max_workers=8) as executor:
             paths = [os.path.join(FEAT_DIR, f) for f in feature_files]
-            futures = {executor.submit(_load_and_compute_b2, p): p for p in paths}
+            futures = {executor.submit(_load_and_compute_b2, p): f for p, f in zip(paths, feature_files)}
             for future in as_completed(futures):
+                fname = futures[future]
+                code = fname.replace('.parquet', '')
                 result = future.result()
                 if result is not None:
+                    result['code'] = code
                     all_dfs.append(result)
                 n_done += 1
                 if n_done % 2000 == 0:
@@ -187,12 +196,16 @@ def main():
     else:
         # Load quickly with just signal rows
         all_dfs = []
+        all_codes = []
         for f in feature_files:
+            code = f.replace('.parquet', '')
             df = pd.read_parquet(os.path.join(FEAT_DIR, f))
             if 'b2_entry_signal' in df.columns:
                 signal_mask = df['b2_entry_signal'] == 1
                 if signal_mask.sum() > 0:
-                    all_dfs.append(df[signal_mask].copy())
+                    df_signal = df[signal_mask].copy()
+                    df_signal['code'] = code
+                    all_dfs.append(df_signal)
         print(f"  Loaded {len(all_dfs)} stocks with B2 signals")
 
     # Step 3: Attach 0AMV features
@@ -224,6 +237,15 @@ def main():
                 signal_df[col] = signal_df['date'].apply(
                     lambda d: date_map.get(d, 0) if pd.notna(d) else 0
                 )
+
+        # Add market cap features
+        if 'code' in signal_df.columns and mktcap_lookup:
+            sym = str(signal_df['code'].iloc[0]).zfill(6)
+            signal_df['ym'] = pd.to_datetime(signal_df['date']).dt.strftime('%Y-%m')
+            signal_df['mktcap_yi'] = signal_df['ym'].map(lambda m: mktcap_lookup.get((m, sym)))
+            signal_df['mktcap_yi'] = pd.to_numeric(signal_df['mktcap_yi'], errors='coerce')
+            signal_df['mktcap_log'] = np.log(signal_df['mktcap_yi'].fillna(1).clip(lower=1))
+            signal_df.drop(columns=['ym'], inplace=True)
 
         if len(signal_df) > 0:
             frames.append(signal_df)

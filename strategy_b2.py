@@ -8,18 +8,19 @@
   案例: 002987, 920039, 688170, 300418, 601778, 688787, 002345, 688202, 688318, 920748
   T+5 胜率 100% | T+5 均值 +24.7% | 最大收益均值 +75.2%
 
-优化项（ML Phase 1-4 驱动，2026-05）:
-  1. J当日阈值: 65→59 (Phase 3 2D Gamma grid最优)
-  2. 涨幅门槛: 4%→5.4% (Phase 3 2D Gamma grid最优)
-  3. 上影线: 1.5%→3.0% + 降级权重×0.7
-  4. 回调深度: 前10日回调>5%→权重×1.2
-  5. 深度缩量: 前日量<20日均量80%→权重×1.3
-  6. 共振加分: b2∩砖型图CC信号→权重×1.5
-  7. OAMV 市场状态: 防守禁止开仓, 动态止损缓冲
-  8. LightGBM 信号过滤: AUC=0.546, 胜率+8.5pp (Phase 4)
+优化项（ML Phase 1-5 驱动，2026-05）:
+  1. 动态阈值: 按 OAMV regime 区分入场门槛 (Phase 5, Sharpe +0.722)
+  2. J当日阈值: 普通55/猛干65/防守55 (Phase 5 网格最优)
+  3. 涨幅门槛: 普通6%/猛干4%/防守6% (Phase 5 网格最优)
+  4. 上影线: 普通3.0%/猛干4.0%/防守2.5% + 降级权重×0.7
+  5. 回调深度: 前10日回调>5%→权重×1.2
+  6. 深度缩量: 前日量<20日均量80%→权重×1.3
+  7. 共振加分: b2∩砖型图CC信号→权重×1.5
+  8. OAMV 市场状态: 防守禁止开仓, 动态止损缓冲
+  9. LightGBM 信号过滤: AUC=0.546, 胜率+8.5pp (Phase 4)
 
-入场条件（7项，ML优化后）:
-  前日 J<20 | 当日涨>5.4% | J<59 | 放量 | 上影线<3% | 白>黄 | 收>黄
+入场条件（7项 + 动态OAMV阈值）:
+  前日 J<20 | 当日涨>动态阈值 | J<动态阈值 | 放量 | 上影线<动态阈值 | 白>黄 | 收>黄
 """
 
 import numpy as np
@@ -39,9 +40,14 @@ def generate_b2_signals(df: pd.DataFrame,
     """Generate B2 signals with optional parameter overrides.
 
     params dict keys (all optional, defaults used if missing):
-      # Entry thresholds
+      # Entry thresholds (Phase 3 optimal, Phase 5 dynamic)
       j_prev_max, gain_min, j_today_max, shadow_max,
       j_today_loose, shadow_loose, prior_strong_ret,
+      # Dynamic thresholds (dynamic_thresholds=True enables per-regime values)
+      dynamic_thresholds, gain_min_aggressive, gain_min_defensive,
+      gain_min_normal, j_today_max_aggressive, j_today_max_defensive,
+      j_today_max_normal, shadow_max_aggressive, shadow_max_defensive,
+      shadow_max_normal, vol_scale,
       # Weight multipliers
       weight_gain_2x_thresh, weight_gain_2x, weight_gap_thresh,
       weight_gap_up, weight_shrink, weight_deep_shrink_ratio,
@@ -66,7 +72,6 @@ def generate_b2_signals(df: pd.DataFrame,
     gain = df['close'] / df['close'].shift(1) - 1
 
     c1 = df['J'].shift(1) < p.get('j_prev_max', 20)
-    c2 = gain > p.get('gain_min', 0.054)
     c4 = df['volume'] > df['volume'].shift(1)
     c6 = df['white_line'] > df['yellow_line']
     c7 = df['close'] > df['yellow_line']
@@ -75,11 +80,55 @@ def generate_b2_signals(df: pd.DataFrame,
     ret_20d = df['close'] / df['close'].shift(20) - 1
     is_prior_strong = ret_20d > p.get('prior_strong_ret', 0.20)
 
-    # 标准阈值
-    c3_std = df['J'] < p.get('j_today_max', 59)
-    c5_std = (df['high'] - df['close']) / df['close'] < p.get('shadow_max', 0.035)
+    # === 动态阈值: 根据 OAMV regime + 波动率调整入场门槛 ===
+    has_oamv = 'oamv_regime' in df.columns
+    use_dynamic = p.get('dynamic_thresholds', False)
 
-    # 强势股放宽阈值
+    if use_dynamic and has_oamv:
+        regime_arr = df['oamv_regime'].values
+
+        # Per-regime gain_min (Phase 5 最优)
+        gain_agg = p.get('gain_min_aggressive', 0.04)
+        gain_def = p.get('gain_min_defensive', 0.06)
+        gain_norm = p.get('gain_min_normal', 0.06)
+        gain_min_arr = np.where(regime_arr == 'aggressive', gain_agg,
+                       np.where(regime_arr == 'defensive', gain_def, gain_norm))
+
+        # Per-regime j_today_max
+        j_agg = p.get('j_today_max_aggressive', 65)
+        j_def = p.get('j_today_max_defensive', 55)
+        j_norm = p.get('j_today_max_normal', 55)
+        j_max_arr = np.where(regime_arr == 'aggressive', j_agg,
+                    np.where(regime_arr == 'defensive', j_def, j_norm))
+
+        # Per-regime shadow_max
+        sh_agg = p.get('shadow_max_aggressive', 0.040)
+        sh_def = p.get('shadow_max_defensive', 0.025)
+        sh_norm = p.get('shadow_max_normal', 0.030)
+        shad_arr = np.where(regime_arr == 'aggressive', sh_agg,
+                   np.where(regime_arr == 'defensive', sh_def, sh_norm))
+
+        # Volatility scaling (optional)
+        if p.get('vol_scale', False) and 'volatility_20d' in df.columns:
+            vol = df['volatility_20d'].values
+            vol_factor = np.clip(vol / 0.03, 0.5, 2.0)
+            gain_min_arr = gain_min_arr * vol_factor
+            shad_arr = shad_arr / np.clip(vol_factor, 0.5, 2.0)
+
+        effective_gain_min = pd.Series(gain_min_arr, index=df.index)
+        effective_j_max = pd.Series(j_max_arr, index=df.index)
+        effective_shad_max = pd.Series(shad_arr, index=df.index)
+    else:
+        effective_gain_min = p.get('gain_min', 0.054)
+        effective_j_max = p.get('j_today_max', 59)
+        effective_shad_max = p.get('shadow_max', 0.035)
+
+    # 标准阈值
+    c2 = gain > effective_gain_min
+    c3_std = df['J'] < effective_j_max
+    c5_std = (df['high'] - df['close']) / df['close'] < effective_shad_max
+
+    # 强势股放宽阈值 (保持固定，强势股自身特征已足够)
     c3_loose = df['J'] < p.get('j_today_loose', 70)
     c5_loose = (df['high'] - df['close']) / df['close'] < p.get('shadow_loose', 0.045)
 
@@ -171,8 +220,6 @@ def generate_b2_signals(df: pd.DataFrame,
     df['b2_loss_stop'] = 0
 
     # === 0AMV 市场状态（活筹指数）===
-    # 从 DataFrame 中读取预计算的 oamv_regime 列，或使用传入参数
-    has_oamv = 'oamv_regime' in df.columns
     if has_oamv:
         oamv_regime_v = df['oamv_regime'].values
     else:

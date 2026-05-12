@@ -29,7 +29,18 @@ OUT_DIR = os.path.join(BASE, 'ML_optimization', 'features')
 os.makedirs(OUT_DIR, exist_ok=True)
 
 
-def compute_extra_features(df):
+_mktcap_lookup = None
+
+
+def _get_mktcap_lookup():
+    global _mktcap_lookup
+    if _mktcap_lookup is None:
+        from ML_optimization.mktcap_utils import build_mktcap_lookup
+        _mktcap_lookup = build_mktcap_lookup()
+    return _mktcap_lookup
+
+
+def compute_extra_features(df, code=None, mktcap_lookup=None):
     """Compute additional features beyond calc_all_indicators."""
     df = df.copy()
 
@@ -117,6 +128,13 @@ def compute_extra_features(df):
     low_20 = df['low'].rolling(20).min()
     df['price_position_20'] = (df['close'] - low_20) / (high_20 - low_20)
 
+    # --- Market cap ---
+    if mktcap_lookup is not None and code is not None:
+        sym = str(code).zfill(6)
+        df['ym'] = pd.to_datetime(df['date']).dt.strftime('%Y-%m')
+        df['mktcap_yi'] = df['ym'].map(lambda m: mktcap_lookup.get((m, sym)))
+        df.drop(columns=['ym'], inplace=True)
+
     return df
 
 
@@ -159,8 +177,9 @@ def process_one_stock(args):
         # Compute core indicators
         df = calc_all_indicators(df, board_type='main')
 
-        # Compute extra features
-        df = compute_extra_features(df)
+        # Compute extra features (with market cap)
+        mktcap_lookup = _get_mktcap_lookup()
+        df = compute_extra_features(df, code=code, mktcap_lookup=mktcap_lookup)
 
         # Construct labels
         df = construct_labels(df)
