@@ -40,7 +40,7 @@ def _pick_screener(base_name):
 
 
 def cmd_screen(args):
-    os.system(f'python {_pick_screener("screen_b2")}')
+    os.system(f'python {_pick_screener("screen_spring")}')
 
 
 def cmd_brick(args):
@@ -62,7 +62,7 @@ def cmd_simulate(args):
     start = args.start or f'{datetime.now().year - 2}-01-01'
     end = args.end or datetime.now().strftime('%Y-%m-%d')
     p1, p2 = positions.split()
-    cmd = (f'python simulation/run_b2_simulation_2026.py '
+    cmd = (f'python simulation/run_spring_simulation_2026.py '
            f'--start {start} --end {end} '
            f'--capital {capital} --min-positions {p1} --max-positions {p2} {dynamic}')
     print(f"[运行] {cmd}")
@@ -84,7 +84,7 @@ def cmd_ml(args):
         print("macOS: 轻量 ML (sklearn). 全量训练建议在 Windows 上运行.")
     else:
         print("Windows: 全量 ML 训练 (xgboost + lightgbm)")
-    print("ML 模块待开发。数据准备: simulation/run_b2_simulation_2026.py 的输出 CSV")
+    print("ML 模块待开发。数据准备: simulation/run_spring_simulation_2026.py 的输出 CSV")
 
 
 def cmd_oamv(args):

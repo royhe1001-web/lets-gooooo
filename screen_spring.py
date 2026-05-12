@@ -79,7 +79,7 @@ def main():
     if len(results) > 10:
         print(f"  ... 共 {len(results)} 只")
 
-    print(f"\n  策略一致性: OK (quant_strategy.strategy_b2.generate_b2_signals)")
+    print(f"\n  策略一致性: OK (quant_strategy.strategy_b2.generate_spring_signals)")
     print(f"  引擎: ProcessPoolExecutor (8 workers)")
 
 

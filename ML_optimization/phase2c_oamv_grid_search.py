@@ -24,7 +24,9 @@ BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BASE)
 
 from quant_strategy.oamv import fetch_market_data, calc_oamv, generate_signals
-from quant_strategy.strategy_b2 import generate_b2_signals
+from quant_strategy.strategy_spring import generate_spring_signals
+from ML_optimization.mktcap_utils import (is_in_pct_range, check_liquidity,
+                                           get_oamv_regime_range)
 
 FEAT_DIR = os.path.join(BASE, 'ML_optimization', 'features')
 OUT_DIR = os.path.join(BASE, 'ML_optimization')
@@ -57,7 +59,8 @@ class Position:
 class OAMVSimEngine:
     """Simulation engine with 0AMV market regime integration."""
 
-    def __init__(self, stock_data, b2_params, oamv_df, oamv_params):
+    def __init__(self, stock_data, b2_params, oamv_df, oamv_params,
+                 mktcap_lookup=None, percentiles=None, enable_liquidity=False):
         self.stock_data = stock_data
         self.b2_params = b2_params
         self.oamv_df = oamv_df.set_index('date')
@@ -66,11 +69,22 @@ class OAMVSimEngine:
         self.initial_capital = DEFAULT_CAPITAL
         self.max_positions = 4
         self.min_positions = 3
+        self.max_entries_per_day = oamv_params.get('max_entries_per_day', 3)
+
+        # B+C+D filter support (Phase 1 validation)
+        self.mktcap_lookup = mktcap_lookup
+        self.percentiles = percentiles        # from compute_mktcap_percentiles()
+        self.enable_liquidity = enable_liquidity
 
         self.positions: Dict[str, Position] = {}
         self.closed_positions: List[Dict] = []
         self.daily_values: List[Dict] = []
         self.trade_log: List[Dict] = []
+
+        # Filter stats for reporting
+        self.filter_stats = {'pct_pass': 0, 'pct_fail': 0,
+                             'liq_pass': 0, 'liq_fail': 0,
+                             'total_signals': 0, 'filtered_signals': 0}
 
     def _get_oamv_regime(self, date):
         """Determine 0AMV regime for a given date."""
@@ -113,7 +127,7 @@ class OAMVSimEngine:
             try:
                 sdf = df.copy()
 
-                # Embed 0AMV regime into DataFrame for generate_b2_signals
+                # Embed 0AMV regime into DataFrame for generate_spring_signals
                 regimes = []
                 for idx in sdf.index:
                     regimes.append(self._get_oamv_regime(idx))
@@ -123,9 +137,11 @@ class OAMVSimEngine:
                 b2p = copy.deepcopy(self.b2_params)
                 b2p['oamv_aggressive_buffer'] = agg_buf
                 b2p['oamv_defensive_buffer'] = def_buf
+                b2p['oamv_normal_buffer'] = self.oamv_params.get('oamv_normal_buffer', 0.97)
+                b2p['oamv_grace_days'] = self.oamv_params.get('oamv_grace_days', 2)
                 b2p['oamv_defensive_ban_entry'] = ban_entry
 
-                sdf = generate_b2_signals(sdf, board_type='main', precomputed=True, params=b2p)
+                sdf = generate_spring_signals(sdf, board_type='main', precomputed=True, params=b2p)
 
                 mask = (sdf.index >= SIM_START) & (sdf.index <= SIM_END)
                 signal_dates = sdf.index[mask & (sdf['b2_entry_signal'] == 1)]
@@ -134,6 +150,26 @@ class OAMVSimEngine:
                     row = sdf.loc[sd]
                     weight = float(row.get('b2_position_weight', 1.0))
                     sig_close = float(row['close'])
+                    regime = self._get_oamv_regime(sd)
+
+                    self.filter_stats['total_signals'] += 1
+
+                    # B+C: Percentile-based market cap filter (regime-aware)
+                    if self.mktcap_lookup and self.percentiles:
+                        if not is_in_pct_range(code, sd, self.mktcap_lookup,
+                                               self.percentiles, regime=regime):
+                            self.filter_stats['pct_fail'] += 1
+                            self.filter_stats['filtered_signals'] += 1
+                            continue
+                        self.filter_stats['pct_pass'] += 1
+
+                    # D: Liquidity filter
+                    if self.enable_liquidity:
+                        if not check_liquidity(sdf, sd, code, self.mktcap_lookup):
+                            self.filter_stats['liq_fail'] += 1
+                            self.filter_stats['filtered_signals'] += 1
+                            continue
+                        self.filter_stats['liq_pass'] += 1
 
                     next_dates = sdf.index[sdf.index > sd]
                     if len(next_dates) == 0:
@@ -148,7 +184,7 @@ class OAMVSimEngine:
                         'weight': weight,
                         't1_date': t1_date,
                         't1_open': t1_open,
-                        'regime': self._get_oamv_regime(sd),
+                        'regime': regime,
                     })
             except Exception:
                 continue
@@ -251,6 +287,8 @@ class OAMVSimEngine:
         to_sell = []
         agg_buf = self.oamv_params.get('oamv_aggressive_buffer', 0.95)
         def_buf = self.oamv_params.get('oamv_defensive_buffer', 0.99)
+        norm_buf = self.oamv_params.get('oamv_normal_buffer', 0.97)
+        grace_days = self.oamv_params.get('oamv_grace_days', 2)
 
         for code, pos in self.positions.items():
             df = self.stock_data.get(code)
@@ -284,9 +322,9 @@ class OAMVSimEngine:
             elif regime == 'defensive':
                 candle_level = pos.entry_low * def_buf
             else:
-                candle_level = pos.entry_low
+                candle_level = pos.entry_low * norm_buf
 
-            candle_stop = close_today < candle_level
+            candle_stop = close_today < candle_level and days_held >= grace_days
             signal_stop = close_today < pos.signal_close
             yellow = float(row.get('yellow_line', 0))
             yellow_stop = yellow > 0 and close_today < yellow
@@ -323,15 +361,31 @@ class OAMVSimEngine:
         return self.cash + hv
 
     def rotate_if_needed(self, signal):
-        if len(self.positions) <= self.max_positions:
+        if len(self.positions) < self.max_positions:
             return True
         weakest = self.find_weakest_position()
         if weakest is None:
             return True
-        if signal['weight'] > weakest.signal_weight + 1.0:
-            sell_price = self.get_price(weakest.code, signal['t1_date'], 'close')
-            if sell_price is None:
-                sell_price = signal['t1_open']
+
+        # Calculate current return of weakest position
+        sell_price = self.get_price(weakest.code, signal['t1_date'], 'close')
+        if sell_price is None:
+            sell_price = signal['t1_open']
+        weakest_return = (sell_price / weakest.buy_price - 1) if weakest.buy_price > 0 else 0
+
+        should_rotate = False
+
+        # 1. New signal significantly stronger → rotate (lowered threshold: 0.3 from 1.0)
+        if signal['weight'] > weakest.signal_weight + 0.3:
+            should_rotate = True
+        # 2. Profitable rotation: weakest has small profit + new signal is any stronger
+        elif weakest_return > 0.03 and signal['weight'] > weakest.signal_weight:
+            should_rotate = True
+        # 3. Loss protection: weakest in loss + new signal has higher weight
+        elif weakest_return < -0.02 and signal['weight'] > weakest.signal_weight:
+            should_rotate = True
+
+        if should_rotate:
             self.sell(weakest.code, signal['t1_date'], sell_price, 'rotate')
             return True
         return False
@@ -349,9 +403,11 @@ class OAMVSimEngine:
                                if SIM_START <= d <= SIM_END + pd.Timedelta(days=10))
 
         pending = []
+        entries_today = 0
         for date in trading_dates:
             self.check_stops(date)
             regime = self._get_oamv_regime(date)
+            entries_today = 0  # reset daily counter
 
             still_pending = []
             for s in pending:
@@ -359,15 +415,20 @@ class OAMVSimEngine:
                     continue
                 if s['code'] in self.positions:
                     continue
+                if entries_today >= self.max_entries_per_day:
+                    still_pending.append(s)
+                    continue
                 # Check defensive ban
                 if regime == 'defensive' and self.oamv_params.get('oamv_defensive_ban_entry', True):
                     still_pending.append(s)
                     continue
                 if self.can_add_position(s['weight']):
                     self.buy(s)
+                    entries_today += 1
                     continue
                 elif self.rotate_if_needed(s):
                     self.buy(s)
+                    entries_today += 1
                     continue
                 still_pending.append(s)
             pending = still_pending
@@ -376,14 +437,19 @@ class OAMVSimEngine:
             for sig in new_sigs:
                 if sig['code'] in self.positions:
                     continue
+                if entries_today >= self.max_entries_per_day:
+                    pending.append(sig)
+                    continue
                 if regime == 'defensive' and self.oamv_params.get('oamv_defensive_ban_entry', True):
                     pending.append(sig)
                     continue
                 if self.can_add_position(sig['weight']):
                     self.buy(sig)
+                    entries_today += 1
                     continue
                 elif self.rotate_if_needed(sig):
                     self.buy(sig)
+                    entries_today += 1
                     continue
                 pending.append(sig)
 
@@ -448,6 +514,7 @@ class OAMVSimEngine:
             'aggressive_buys': agg_buys,
             'defensive_buys': def_buys,
             'normal_buys': norm_buys,
+            'filter_stats': dict(self.filter_stats),
         }
 
 
@@ -554,6 +621,8 @@ def build_param_sets():
         'oamv_defensive_threshold': -2.35,
         'oamv_aggressive_buffer': 0.95,
         'oamv_defensive_buffer': 0.99,
+        'oamv_normal_buffer': 0.97,
+        'oamv_grace_days': 2,
         'oamv_defensive_ban_entry': True,
     }
 

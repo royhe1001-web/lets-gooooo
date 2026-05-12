@@ -136,6 +136,8 @@ class StopOptimEngine(p2c_mod.OAMVSimEngine):
         to_sell = []
         agg_buf = self.oamv_params.get('oamv_aggressive_buffer', 0.95)
         def_buf = self.oamv_params.get('oamv_defensive_buffer', 0.99)
+        norm_buf = self.oamv_params.get('oamv_normal_buffer', 0.97)
+        grace_days = self.oamv_params.get('oamv_grace_days', 2)
 
         for code, pos in list(self.positions.items()):
             df = self.stock_data.get(code)
@@ -212,9 +214,9 @@ class StopOptimEngine(p2c_mod.OAMVSimEngine):
             elif regime == 'defensive':
                 candle_level = pos.entry_low * def_buf
             else:
-                candle_level = pos.entry_low
+                candle_level = pos.entry_low * norm_buf
 
-            candle_stop = close_today < candle_level
+            candle_stop = close_today < candle_level and days_held >= grace_days
             signal_stop = close_today < pos.signal_close
             yellow = float(row.get('yellow_line', 0))
             yellow_stop = yellow > 0 and close_today < yellow

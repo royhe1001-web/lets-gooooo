@@ -11,9 +11,9 @@ b2 策略 2026年 T+1 模拟交易系统
   - 无持仓期限限制
 
 用法:
-  python run_b2_simulation_2026.py                    # 默认参数
-  python run_b2_simulation_2026.py --capital 200000   # 自定义资金
-  python run_b2_simulation_2026.py --start 2026-01-01 --end 2026-05-07
+  python run_spring_simulation_2026.py                    # 默认参数
+  python run_spring_simulation_2026.py --capital 200000   # 自定义资金
+  python run_spring_simulation_2026.py --start 2026-01-01 --end 2026-05-07
 """
 
 import argparse, os, sys, time, warnings
@@ -28,7 +28,7 @@ BASE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(BASE)
 sys.path.insert(0, ROOT)
 from quant_strategy.indicators import calc_all_indicators
-from quant_strategy.strategy_b2 import generate_b2_signals
+from quant_strategy.strategy_spring import generate_spring_signals
 
 DATA_DIR = os.path.join(ROOT, 'fetch_kline', 'stock_kline')
 OUT = os.path.join(ROOT, 'output')
@@ -171,7 +171,7 @@ class SimulationEngine:
                     continue
 
                 full_df = calc_all_indicators(full_df, board_type='main')
-                full_df = generate_b2_signals(full_df, board_type='main', precomputed=True)
+                full_df = generate_spring_signals(full_df, board_type='main', precomputed=True)
 
                 # Find signals in date range
                 mask = (full_df.index >= self.start_date) & (full_df.index <= self.end_date)
@@ -661,11 +661,11 @@ class SimulationEngine:
 
         # Export
         os.makedirs(OUT, exist_ok=True)
-        fp = os.path.join(OUT, 'b2_simulation_2026.csv')
+        fp = os.path.join(OUT, 'spring_simulation_2026.csv')
         pd.DataFrame(self.trade_log).to_csv(fp, index=False)
         print(f"\n  交易记录: {fp}")
 
-        fp2 = os.path.join(OUT, 'b2_simulation_2026_nav.csv')
+        fp2 = os.path.join(OUT, 'spring_simulation_2026_nav.csv')
         pd.DataFrame(self.daily_values).to_csv(fp2, index=False)
         print(f"  净值曲线: {fp2}")
 

@@ -32,7 +32,7 @@ BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BASE)
 
 from quant_strategy.indicators import calc_all_indicators
-from quant_strategy.strategy_b2 import generate_b2_signals
+from quant_strategy.strategy_spring import generate_spring_signals
 
 DATA_DIR = os.path.join(BASE, 'fetch_kline', 'stock_kline')
 FEAT_DIR = os.path.join(BASE, 'ML_optimization', 'features')
@@ -212,7 +212,7 @@ def build_param_sets():
 
 
 # ============================================================
-# Simulation Engine (replicates run_b2_simulation_2026 logic)
+# Simulation Engine (replicates run_spring_simulation_2026 logic)
 # ============================================================
 class FastSimulationEngine:
     """Simulation engine that operates on pre-loaded + pre-computed DataFrames."""
@@ -248,7 +248,7 @@ class FastSimulationEngine:
         for code, df in self.stock_data.items():
             try:
                 # Re-generate B2 signals with current params
-                sdf = generate_b2_signals(df.copy(), board_type='main', precomputed=True,
+                sdf = generate_spring_signals(df.copy(), board_type='main', precomputed=True,
                                           params=self.b2_params)
 
                 mask = (sdf.index >= SIM_START) & (sdf.index <= SIM_END)
@@ -589,7 +589,7 @@ def preload_all_stocks():
     parquet_files = sorted([f for f in os.listdir(FEAT_DIR) if f.endswith('.parquet')])
     print(f"  Found {len(parquet_files)} parquet files")
 
-    # Columns needed: OHLCV + indicators for generate_b2_signals(precomputed=True)
+    # Columns needed: OHLCV + indicators for generate_spring_signals(precomputed=True)
     needed_cols = ['date', 'open', 'high', 'low', 'close', 'volume',
                    'K', 'D', 'J', 'MACD_DIF', 'MACD_DEA', 'MACD_HIST',
                    'white_line', 'yellow_line', 'white_above_yellow', 'white_direction',

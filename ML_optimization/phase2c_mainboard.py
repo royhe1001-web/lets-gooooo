@@ -20,7 +20,7 @@ BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BASE)
 
 from oamv import fetch_market_data, calc_oamv, generate_signals
-from strategy_b2 import generate_b2_signals
+from strategy_spring import generate_spring_signals
 from ML_optimization.mktcap_utils import build_mktcap_lookup, is_in_mktcap_range
 
 FEAT_DIR = os.path.join(BASE, 'ML_optimization', 'features')
@@ -61,6 +61,7 @@ PULLBACK_B2 = {**EXPLOSIVE_B2, 'weight_gain_2x_thresh': 0.07, 'weight_gain_2x': 
 DEFAULT_OAMV = {
     'oamv_aggressive_threshold': 3.0, 'oamv_defensive_threshold': -2.35,
     'oamv_aggressive_buffer': 0.95, 'oamv_defensive_buffer': 0.99,
+    'oamv_normal_buffer': 0.97, 'oamv_grace_days': 2,
     'oamv_defensive_ban_entry': True,
 }
 
@@ -161,18 +162,18 @@ def _eval_stock_chunk(args):
                 regime = np.where(chg > agg_thresh, 'aggressive',
                          np.where(chg < def_thresh, 'defensive', 'normal'))
                 dc['oamv_regime'] = regime
-                sdf = generate_b2_signals(dc, board_type='main', precomputed=True, params=b2p)
+                sdf = generate_spring_signals(dc, board_type='main', precomputed=True, params=b2p)
                 mask = (sdf.index >= sim_start) & (sdf.index <= sim_end)
                 sig_idx = sdf.index[mask & (sdf['b2_entry_signal'] == 1)]
                 for i in sig_idx:
                     pos = sdf.index.get_loc(i)
-                    if pos + 5 < len(sdf):
+                    if pos + 4 < len(sdf):
                         # Dynamic market cap filter (500-1000亿) at signal date
                         if mktcap_lookup:
                             if not is_in_mktcap_range(code, i, mktcap_lookup, MktCap_MIN, MktCap_MAX):
                                 continue
                         buy_px = float(sdf.loc[i, 'close'])
-                        sell_px = float(sdf.iloc[pos + 5]['open'])
+                        sell_px = float(sdf.iloc[pos + 4]['open'])
                         ret = sell_px / buy_px - 1
                         w = float(sdf.loc[i, 'b2_position_weight'])
                         total_wr += ret * w; total_w += w; n += 1

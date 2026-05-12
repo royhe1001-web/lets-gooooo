@@ -36,7 +36,7 @@ CONFIG = {
     'roles': {
         'analyzer': {
             'description': '策略开发 + M1选股 + 快速分析',
-            'screen_script': 'screeners/screen_b2_m1.py',
+            'screen_script': 'screeners/screen_spring_m1.py',
             'brick_script': 'screeners/screen_brick_m1.py',
             'holdings_tool': 'run_test/run_holdings_analysis.py',
             'max_simulation_years': 3,
@@ -44,7 +44,7 @@ CONFIG = {
         },
         'worker': {
             'description': '数据下载 + 长期回测 + ML训练',
-            'screen_script': 'screeners/screen_b2.py',
+            'screen_script': 'screeners/screen_spring.py',
             'brick_script': 'screeners/screen_brick.py',
             'holdings_tool': 'run_test/run_holdings_analysis.py',
             'max_simulation_years': 15,

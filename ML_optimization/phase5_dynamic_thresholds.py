@@ -26,7 +26,7 @@ BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BASE)
 
 from oamv import fetch_market_data, calc_oamv, generate_signals as gen_oamv
-from strategy_b2 import generate_b2_signals
+from strategy_spring import generate_spring_signals
 
 FEAT_DIR = os.path.join(BASE, 'ML_optimization', 'features')
 OUT_DIR = os.path.join(BASE, 'ML_optimization')
@@ -197,7 +197,7 @@ def eval_params_weighted(stock_data, params, sim_start, sim_end):
                      np.where(chg < def_thresh, 'defensive', 'normal'))
             df_copy['oamv_regime'] = regime
 
-            sdf = generate_b2_signals(df_copy, board_type='main', precomputed=True, params=b2_params)
+            sdf = generate_spring_signals(df_copy, board_type='main', precomputed=True, params=b2_params)
             mask = (sdf.index >= sim_start) & (sdf.index <= sim_end)
             sig_idx = sdf.index[mask & (sdf['b2_entry_signal'] == 1)]
 

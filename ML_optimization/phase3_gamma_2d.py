@@ -26,7 +26,7 @@ BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BASE)
 
 from quant_strategy.oamv import fetch_market_data, calc_oamv, generate_signals as gen_oamv
-from quant_strategy.strategy_b2 import generate_b2_signals
+from quant_strategy.strategy_spring import generate_spring_signals
 
 FEAT_DIR = os.path.join(BASE, 'ML_optimization', 'features')
 OUT_DIR = os.path.join(BASE, 'ML_optimization')
@@ -112,7 +112,7 @@ def eval_params(stock_data, params):
     """Evaluate a parameter set on preloaded stock data. Returns mean signal return.
 
     If params contains oamv_aggressive_threshold or oamv_defensive_threshold,
-    the oamv_regime column is recomputed before calling generate_b2_signals.
+    the oamv_regime column is recomputed before calling generate_spring_signals.
     """
     # Extract OAMV regime thresholds if present
     agg_thresh = params.get('oamv_aggressive_threshold', 3.0)
@@ -132,7 +132,7 @@ def eval_params(stock_data, params):
                      np.where(chg < def_thresh, 'defensive', 'normal'))
             df_copy['oamv_regime'] = regime
 
-            sdf = generate_b2_signals(df_copy, board_type='main', precomputed=True, params=b2_params)
+            sdf = generate_spring_signals(df_copy, board_type='main', precomputed=True, params=b2_params)
             mask = (sdf.index >= SIM_START) & (sdf.index <= SIM_END)
             sig_idx = sdf.index[mask & (sdf['b2_entry_signal'] == 1)]
 

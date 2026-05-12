@@ -26,7 +26,7 @@ ROOT = os.path.dirname(BASE)
 sys.path.insert(0, ROOT)
 
 from quant_strategy.indicators import calc_all_indicators
-from quant_strategy.strategy_b2 import generate_b2_signals
+from quant_strategy.strategy_spring import generate_spring_signals
 
 DATA_DIR = os.path.join(ROOT, "fetch_kline", "stock_kline")
 OUT = os.path.join(ROOT, "output")
@@ -144,7 +144,7 @@ class OAMVSimEngine:
                     continue
 
                 full_df = calc_all_indicators(full_df, board_type="main")
-                full_df = generate_b2_signals(full_df, board_type="main", precomputed=True)
+                full_df = generate_spring_signals(full_df, board_type="main", precomputed=True)
 
                 mask = (full_df.index >= self.start_date) & (full_df.index <= self.end_date)
                 signal_dates = full_df.index[mask & (full_df["b2_entry_signal"] == 1)]

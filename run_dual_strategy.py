@@ -9,10 +9,10 @@ ROOT = os.path.dirname(BASE)
 sys.path.insert(0, ROOT)
 sys.path.insert(0, os.path.join(ROOT, 'simulation'))
 
-from run_b2_simulation_2026 import (SimulationEngine, Position,
+from run_spring_simulation_2026 import (SimulationEngine, Position,
                                      SUPER_WEIGHT_THRESHOLD, DATA_DIR)
 from quant_strategy.indicators import calc_all_indicators
-from quant_strategy.strategy_b2 import generate_b2_signals
+from quant_strategy.strategy_spring import generate_spring_signals
 from quant_strategy.strategy_brick import generate_brick_signals
 
 OUT = os.path.join(ROOT, 'output')
@@ -32,7 +32,7 @@ class DualEngine(SimulationEngine):
             if len(full_df) < 200: continue
             try:
                 full_df = calc_all_indicators(full_df, board_type='main')
-                full_df = generate_b2_signals(full_df, board_type='main', precomputed=True)
+                full_df = generate_spring_signals(full_df, board_type='main', precomputed=True)
                 full_df = generate_brick_signals(full_df, board_type='main', precomputed=False)
 
                 mask = (full_df.index >= self.start_date) & (full_df.index <= self.end_date)

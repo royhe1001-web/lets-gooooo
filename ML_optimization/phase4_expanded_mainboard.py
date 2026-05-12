@@ -24,7 +24,7 @@ BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BASE)
 
 from oamv import fetch_market_data, calc_oamv, generate_signals as gen_oamv
-from strategy_b2 import generate_b2_signals
+from strategy_spring import generate_spring_signals
 from ML_optimization.mktcap_utils import build_mktcap_lookup
 
 FEAT_DIR = os.path.join(BASE, 'ML_optimization', 'features')
@@ -246,7 +246,7 @@ def load_and_extract_signals(parquet_path, oamv_index):
         if len(sdf) < 60:
             return None
 
-        sdf = generate_b2_signals(sdf, board_type='main', precomputed=True,
+        sdf = generate_spring_signals(sdf, board_type='main', precomputed=True,
                                    params=B2_PARAMS)
 
         sig_mask = sdf['b2_entry_signal'] == 1

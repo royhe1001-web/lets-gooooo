@@ -29,7 +29,7 @@ BASE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(BASE)
 sys.path.insert(0, ROOT)
 from quant_strategy.indicators import calc_all_indicators, calc_brick_chart, calc_white_yellow_line
-from quant_strategy.strategy_b2 import generate_b2_signals
+from quant_strategy.strategy_spring import generate_spring_signals
 
 from quant_strategy import load_stock_data
 OUT = os.path.join(ROOT, 'output')
@@ -591,7 +591,7 @@ def main(holdings, target_date, do_scan=True, output_dir=None, entry_info=None):
 
         try:
             stock = calc_all_indicators(stock, board_type='main')
-            stock = generate_b2_signals(stock, board_type='main', precomputed=True)
+            stock = generate_spring_signals(stock, board_type='main', precomputed=True)
 
             target_loc = stock.index.get_loc(target_date)
             last = stock.iloc[target_loc]

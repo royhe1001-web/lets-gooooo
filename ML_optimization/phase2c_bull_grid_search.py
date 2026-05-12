@@ -24,9 +24,12 @@ BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BASE)
 
 import ML_optimization.phase2c_oamv_grid_search as p2c_mod
-from ML_optimization.mktcap_utils import build_mktcap_lookup, get_mktcap_universe, is_in_mktcap_range
+from ML_optimization.mktcap_utils import (
+    build_mktcap_lookup, get_mktcap_universe, is_in_mktcap_range,
+    compute_mktcap_percentiles, get_pct_universe, is_in_pct_range,
+)
 from quant_strategy.oamv import fetch_market_data, calc_oamv, generate_signals as gen_oamv
-from strategy_b2 import generate_b2_signals
+from strategy_spring import generate_spring_signals
 
 FEAT_DIR = os.path.join(BASE, 'ML_optimization', 'features')
 OUT_DIR = os.path.join(BASE, 'ML_optimization')
@@ -35,17 +38,18 @@ OUT_DIR = os.path.join(BASE, 'ML_optimization')
 # Date Constants
 # ============================================================
 TRAIN_BULL_1 = (pd.Timestamp('2014-07-01'), pd.Timestamp('2015-06-12'))
+TRAIN_RANGE_2016_2017 = (pd.Timestamp('2016-01-01'), pd.Timestamp('2017-12-31'))
 TRAIN_BULL_2 = (pd.Timestamp('2020-03-23'), pd.Timestamp('2021-12-13'))
 TRAIN_BULL_3 = (pd.Timestamp('2024-01-01'), pd.Timestamp('2025-06-30'))
-TRAIN_PERIODS = [TRAIN_BULL_1, TRAIN_BULL_2, TRAIN_BULL_3]
-TRAIN_PERIOD_NAMES = ['Bull1_2014-2015', 'Bull2_2020-2021', 'Bull3_2024-2025H1']
+TRAIN_PERIODS = [TRAIN_BULL_1, TRAIN_RANGE_2016_2017, TRAIN_BULL_2, TRAIN_BULL_3]
+TRAIN_PERIOD_NAMES = ['Bull1_2014-2015', 'Range_2016-2017', 'Bull2_2020-2021', 'Bull3_2024-2025H1']
 
 VAL_START = pd.Timestamp('2025-07-01')
 VAL_END   = pd.Timestamp('2025-12-31')
 TEST_START = pd.Timestamp('2026-01-01')
 TEST_END   = pd.Timestamp('2026-05-07')
 
-MktCap_MIN, MktCap_MAX = 500, 1000
+MktCap_USE_PERCENTILE = True   # B+C: percentile-based with OAMV regime
 MAIN_BOARD_PREFIXES = ('000', '002', '003', '600', '601', '603', '605')
 
 # Sanity check: no overlap
@@ -75,6 +79,7 @@ PULLBACK_B2 = {**EXPLOSIVE_B2, 'weight_gain_2x_thresh': 0.07, 'weight_gain_2x': 
 DEFAULT_OAMV = {
     'oamv_aggressive_threshold': 3.0, 'oamv_defensive_threshold': -2.35,
     'oamv_aggressive_buffer': 0.95, 'oamv_defensive_buffer': 0.99,
+    'oamv_normal_buffer': 0.97, 'oamv_grace_days': 2,
     'oamv_defensive_ban_entry': True,
 }
 
@@ -163,6 +168,8 @@ class StopOptimEngine(p2c_mod.OAMVSimEngine):
         to_sell = []
         agg_buf = self.oamv_params.get('oamv_aggressive_buffer', 0.95)
         def_buf = self.oamv_params.get('oamv_defensive_buffer', 0.99)
+        norm_buf = self.oamv_params.get('oamv_normal_buffer', 0.97)
+        grace_days = self.oamv_params.get('oamv_grace_days', 2)
 
         for code, pos in list(self.positions.items()):
             df = self.stock_data.get(code)
@@ -237,9 +244,9 @@ class StopOptimEngine(p2c_mod.OAMVSimEngine):
             elif regime == 'defensive':
                 candle_level = pos.entry_low * def_buf
             else:
-                candle_level = pos.entry_low
+                candle_level = pos.entry_low * norm_buf
 
-            candle_stop = close_today < candle_level
+            candle_stop = close_today < candle_level and days_held >= grace_days
             signal_stop = close_today < pos.signal_close
             yellow = float(row.get('yellow_line', 0))
             yellow_stop = yellow > 0 and close_today < yellow
@@ -270,7 +277,7 @@ class StopOptimEngine(p2c_mod.OAMVSimEngine):
 
 
 # ============================================================
-# Stage 1: Fast T+5 Screening on Multi-Period
+# Stage 1: Fast T+4 Screening on Multi-Period
 # ============================================================
 NEEDED_COLS_S1 = ['date', 'open', 'high', 'low', 'close', 'volume',
                   'K', 'D', 'J', 'MACD_DIF', 'MACD_DEA', 'MACD_HIST',
@@ -295,8 +302,10 @@ def _eval_stock_chunk_bull(args):
 
     try:
         mktcap_lookup = build_mktcap_lookup()
+        percentiles = compute_mktcap_percentiles()
     except Exception:
         mktcap_lookup = {}
+        percentiles = {}
 
     stock_data = {}
     for f in stock_files:
@@ -333,7 +342,7 @@ def _eval_stock_chunk_bull(args):
                 regime = np.where(chg > agg_thresh, 'aggressive',
                          np.where(chg < def_thresh, 'defensive', 'normal'))
                 dc['oamv_regime'] = regime
-                sdf = generate_b2_signals(dc, board_type='main', precomputed=True, params=b2p)
+                sdf = generate_spring_signals(dc, board_type='main', precomputed=True, params=b2p)
 
                 # Filter to signals within ANY training period
                 bull_mask = is_in_any_period(sdf.index, train_periods)
@@ -341,12 +350,13 @@ def _eval_stock_chunk_bull(args):
 
                 for i in sig_idx:
                     pos = sdf.index.get_loc(i)
-                    if pos + 5 < len(sdf):
-                        if mktcap_lookup:
-                            if not is_in_mktcap_range(code, i, mktcap_lookup, MktCap_MIN, MktCap_MAX):
+                    if pos + 4 < len(sdf):
+                        if mktcap_lookup and percentiles:
+                            regime_i = sdf.loc[i, 'oamv_regime'] if 'oamv_regime' in sdf.columns else 'normal'
+                            if not is_in_pct_range(code, i, mktcap_lookup, percentiles, regime=regime_i):
                                 continue
                         buy_px = float(sdf.loc[i, 'close'])
-                        sell_px = float(sdf.iloc[pos + 5]['open'])
+                        sell_px = float(sdf.iloc[pos + 4]['open'])
                         ret = sell_px / buy_px - 1
                         w = float(sdf.loc[i, 'b2_position_weight'])
                         total_wr += ret * w; total_w += w; n += 1
@@ -484,16 +494,21 @@ def _prepare_oamv_and_b2_params(param_set):
 
 
 def run_one_period(stock_data, b2_params, oamv_params, oamv_df,
-                   period_start, period_end, stop_config):
+                   period_start, period_end, stop_config,
+                   mktcap_lookup=None, percentiles=None):
     """Run backtest on a single contiguous period."""
     p2c_mod.SIM_START = period_start
     p2c_mod.SIM_END = period_end
 
     if stop_config is not None:
         engine = StopOptimEngine(stock_data, b2_params, oamv_df, oamv_params,
-                                 stop_config=stop_config)
+                                 stop_config=stop_config,
+                                 mktcap_lookup=mktcap_lookup,
+                                 percentiles=percentiles)
     else:
-        engine = p2c_mod.OAMVSimEngine(stock_data, b2_params, oamv_df, oamv_params)
+        engine = p2c_mod.OAMVSimEngine(stock_data, b2_params, oamv_df, oamv_params,
+                                       mktcap_lookup=mktcap_lookup,
+                                       percentiles=percentiles)
 
     metrics = engine.run()
     metrics['n_days'] = max(1, len([d for d in pd.date_range(period_start, period_end)
@@ -569,6 +584,8 @@ def _run_grid_job(args_dict):
             to_sell = []
             agg_buf = self.oamv_params.get('oamv_aggressive_buffer', 0.95)
             def_buf = self.oamv_params.get('oamv_defensive_buffer', 0.99)
+            norm_buf = self.oamv_params.get('oamv_normal_buffer', 0.97)
+            grace_days = self.oamv_params.get('oamv_grace_days', 2)
 
             for code, pos in list(self.positions.items()):
                 df = self.stock_data.get(code)
@@ -634,9 +651,9 @@ def _run_grid_job(args_dict):
                 elif regime == 'defensive':
                     candle_level = pos.entry_low * def_buf
                 else:
-                    candle_level = pos.entry_low
+                    candle_level = pos.entry_low * norm_buf
 
-                candle_stop = close_today < candle_level
+                candle_stop = close_today < candle_level and days_held >= grace_days
                 signal_stop = close_today < pos.signal_close
                 yellow = float(row.get('yellow_line', 0))
                 yellow_stop = yellow > 0 and close_today < yellow
@@ -665,7 +682,8 @@ def _run_grid_job(args_dict):
                 if code in self.positions:
                     self.sell(code, exit_date, exit_price, reason, partial=partial)
 
-    from ML_optimization.mktcap_utils import build_mktcap_lookup, get_mktcap_universe
+    from ML_optimization.mktcap_utils import (build_mktcap_lookup, get_mktcap_universe,
+        compute_mktcap_percentiles)
 
     # Load stock data
     data = json.loads(args_dict['stock_data_json'])
@@ -691,6 +709,14 @@ def _run_grid_job(args_dict):
     stop_config = json.loads(args_dict['stop_config_json']) if args_dict['stop_config_json'] else None
     periods = json.loads(args_dict['periods_json'])
 
+    # Load mktcap data for percentile filtering
+    try:
+        mktcap_lookup = build_mktcap_lookup()
+        percentiles = compute_mktcap_percentiles()
+    except Exception:
+        mktcap_lookup = {}
+        percentiles = {}
+
     period_results = []
     for p_start_str, p_end_str in periods:
         p_start = pd.Timestamp(p_start_str)
@@ -699,9 +725,14 @@ def _run_grid_job(args_dict):
         p2c.SIM_END = p_end
 
         if stop_config is not None:
-            engine = StopEng(stock_data, b2_params, oamv_df, oamv_params, stop_config=stop_config)
+            engine = StopEng(stock_data, b2_params, oamv_df, oamv_params,
+                           stop_config=stop_config,
+                           mktcap_lookup=mktcap_lookup,
+                           percentiles=percentiles)
         else:
-            engine = p2c.OAMVSimEngine(stock_data, b2_params, oamv_df, oamv_params)
+            engine = p2c.OAMVSimEngine(stock_data, b2_params, oamv_df, oamv_params,
+                                       mktcap_lookup=mktcap_lookup,
+                                       percentiles=percentiles)
 
         metrics = engine.run()
         metrics['n_days'] = max(1, len(pd.date_range(p_start, p_end, freq='B')))
@@ -825,16 +856,21 @@ def stage2_train_grid(param_sets, stop_profiles, stock_data_paths, oamv_df_path,
 # Stages 3-4: Validation and Test
 # ============================================================
 def run_val_or_test(stock_data, b2_params, oamv_params, oamv_df,
-                    start, end, stop_config, label):
+                    start, end, stop_config, label,
+                    mktcap_lookup=None, percentiles=None):
     """Run a single backtest on Val or Test period."""
     p2c_mod.SIM_START = start
     p2c_mod.SIM_END = end
 
     if stop_config is not None:
         engine = StopOptimEngine(stock_data, b2_params, oamv_df, oamv_params,
-                                 stop_config=stop_config)
+                                 stop_config=stop_config,
+                                 mktcap_lookup=mktcap_lookup,
+                                 percentiles=percentiles)
     else:
-        engine = p2c_mod.OAMVSimEngine(stock_data, b2_params, oamv_df, oamv_params)
+        engine = p2c_mod.OAMVSimEngine(stock_data, b2_params, oamv_df, oamv_params,
+                                       mktcap_lookup=mktcap_lookup,
+                                       percentiles=percentiles)
 
     metrics = engine.run()
 
@@ -862,7 +898,7 @@ def main():
           f"{[(s.date(), e.date()) for s, e in TRAIN_PERIODS]}")
     print(f"  Val:   {VAL_START.date()} ~ {VAL_END.date()}")
     print(f"  Test:  {TEST_START.date()} ~ {TEST_END.date()}")
-    print(f"  MktCap: {MktCap_MIN}-{MktCap_MAX}亿")
+    print(f"  MktCap: percentile-based (B+C), OAMV regime-aware")
 
     # ---- Load shared data ----
     print(f"\n[0/4] Loading OAMV + market cap + stock list...")
@@ -872,22 +908,23 @@ def main():
     print(f"  OAMV: {len(oamv_df)} days")
 
     mktcap_lookup = build_mktcap_lookup()
+    percentiles = compute_mktcap_percentiles()
 
     # Get stock files
     all_files = _get_stock_files_mainboard()
     print(f"  Main board stocks: {len(all_files)}")
 
-    # Build eligible universe across all training periods
+    # Build eligible universe using percentile-based filtering (widest = aggressive)
     eligible_codes = set()
     for s, e in TRAIN_PERIODS:
         ym_s = s.strftime('%Y-%m')
         ym_e = e.strftime('%Y-%m')
-        codes = get_mktcap_universe(mktcap_lookup, ym_s, MktCap_MIN, MktCap_MAX, ym_end=ym_e)
+        codes = get_pct_universe(mktcap_lookup, percentiles, ym_s, ym_end=ym_e, regime='aggressive')
         eligible_codes.update(codes)
     # Also add Val + Test period codes
-    codes_val = get_mktcap_universe(mktcap_lookup, '2025-07', MktCap_MIN, MktCap_MAX, ym_end='2026-05')
+    codes_val = get_pct_universe(mktcap_lookup, percentiles, '2025-07', ym_end='2026-05', regime='aggressive')
     eligible_codes.update(codes_val)
-    print(f"  Eligible codes (ever in range): {len(eligible_codes)}")
+    print(f"  Eligible codes (percentile, aggressive prefilter): {len(eligible_codes)}")
 
     # Save OAMV to pickle for subprocess reuse
     import tempfile, pickle
@@ -895,10 +932,10 @@ def main():
     oamv_df.to_pickle(oamv_tmp)
 
     # ---- Stage 1: Fast Screening ----
-    print(f"\n[1/4] Stage 1: Fast T+5 Screening on Bull Periods")
+    print(f"\n[1/4] Stage 1: Fast T+4 Screening on Bull Periods")
     print("-" * 60)
     param_sets = build_param_sets()
-    stage1_results = stage1_fast_screen(all_files, oamv_df, param_sets, TRAIN_PERIODS, n_workers=0)
+    stage1_results = stage1_fast_screen(all_files, oamv_df, param_sets, TRAIN_PERIODS, n_workers=4)
     top5 = stage1_results[:5]
 
     print(f"\n  Top-5 B2 combos:")
@@ -924,7 +961,7 @@ def main():
     top5_param_sets = [ps for ps in param_sets if ps['name'] in top5_names]
 
     grid_results = stage2_train_grid(top5_param_sets, STOP_PROFILES, stock_data_paths,
-                                     oamv_tmp, TRAIN_PERIODS, n_workers=1)
+                                     oamv_tmp, TRAIN_PERIODS, n_workers=4)
 
     print(f"\n  Top-5 Train (Aggregate) Results:")
     for i, r in enumerate(grid_results[:5]):
@@ -944,7 +981,9 @@ def main():
         sp = STOP_PROFILES[r['stop_profile']]
         m = run_val_or_test(stock_data, b2, oamv, oamv_df,
                            VAL_START, VAL_END, sp,
-                           f"{r['b2_name']}+{r['stop_profile']}")
+                           f"{r['b2_name']}+{r['stop_profile']}",
+                           mktcap_lookup=mktcap_lookup,
+                           percentiles=percentiles)
         m['b2_name'] = r['b2_name']
         m['stop_profile'] = r['stop_profile']
         val_results.append(m)
@@ -968,18 +1007,24 @@ def main():
     # Test best config
     test_best = run_val_or_test(stock_data, best_b2, best_oamv, oamv_df,
                                 TEST_START, TEST_END, best_stop,
-                                f"{best_val['b2_name']}+{best_val['stop_profile']}")
+                                f"{best_val['b2_name']}+{best_val['stop_profile']}",
+                                mktcap_lookup=mktcap_lookup,
+                                percentiles=percentiles)
 
     # Test Explosive_def2.0 + None (baseline)
     exp_ps = next(ps for ps in param_sets if ps['name'] == 'Explosive_def2.0')
     exp_b2, exp_oamv = _prepare_oamv_and_b2_params(exp_ps)
     test_orig = run_val_or_test(stock_data, exp_b2, exp_oamv, oamv_df,
-                                TEST_START, TEST_END, None, 'Explosive_def2.0+None')
+                                TEST_START, TEST_END, None, 'Explosive_def2.0+None',
+                                mktcap_lookup=mktcap_lookup,
+                                percentiles=percentiles)
 
     # Test Explosive_def2.0 + Tight (old best stop)
     test_old_best = run_val_or_test(stock_data, exp_b2, exp_oamv, oamv_df,
                                     TEST_START, TEST_END, STOP_PROFILES['Tight'],
-                                    'Explosive_def2.0+Tight')
+                                    'Explosive_def2.0+Tight',
+                                    mktcap_lookup=mktcap_lookup,
+                                    percentiles=percentiles)
 
     print(f"\n  {'Config':<35s} {'Return':>10s} {'Sharpe':>8s} {'WR':>8s} {'MaxDD':>8s} {'Trades':>8s}")
     print(f"  {'-'*80}")

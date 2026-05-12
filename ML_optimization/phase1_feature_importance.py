@@ -27,7 +27,7 @@ warnings.filterwarnings('ignore')
 BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BASE)
 
-from quant_strategy.strategy_b2 import generate_b2_signals
+from quant_strategy.strategy_spring import generate_spring_signals
 
 DATA_DIR = os.path.join(BASE, 'fetch_kline', 'stock_kline')
 FEAT_DIR = os.path.join(BASE, 'ML_optimization', 'features')
@@ -53,11 +53,11 @@ def load_and_compute_b2(parquet_path):
     try:
         df = pd.read_parquet(parquet_path)
 
-        # Reconstruct OHLCV DataFrame for generate_b2_signals
+        # Reconstruct OHLCV DataFrame for generate_spring_signals
         ohlcv = df[['date', 'open', 'close', 'high', 'low', 'volume']].copy()
         ohlcv = ohlcv.set_index('date')
 
-        # Add pre-computed indicators for generate_b2_signals (precomputed mode)
+        # Add pre-computed indicators for generate_spring_signals (precomputed mode)
         for col in ['K', 'D', 'J', 'MACD_DIF', 'MACD_DEA', 'MACD_HIST',
                      'white_line', 'yellow_line', 'cross_below_yellow',
                      'brick_green_to_red', 'brick_val']:
@@ -65,7 +65,7 @@ def load_and_compute_b2(parquet_path):
                 ohlcv[col] = df[col].values
 
         # Compute B2 signals
-        ohlcv = generate_b2_signals(ohlcv, board_type='main', precomputed=True)
+        ohlcv = generate_spring_signals(ohlcv, board_type='main', precomputed=True)
 
         # Merge B2 signal columns back
         for col in ['b2_entry_signal', 'b2_position_weight', 'b2_prior_strong',

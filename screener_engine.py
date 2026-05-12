@@ -47,10 +47,10 @@ def _worker_b2(args):
             return None
 
         from quant_strategy.indicators import calc_all_indicators
-        from quant_strategy.strategy_b2 import generate_b2_signals
+        from quant_strategy.strategy_spring import generate_spring_signals
 
         df = calc_all_indicators(df, board_type='main')
-        df = generate_b2_signals(df, board_type='main', precomputed=True)
+        df = generate_spring_signals(df, board_type='main', precomputed=True)
 
         target_loc = df.index.get_loc(target_date)
         last = df.iloc[target_loc]

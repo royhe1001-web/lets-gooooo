@@ -27,7 +27,7 @@ BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BASE)
 
 from quant_strategy.oamv import fetch_market_data, calc_oamv, generate_signals as gen_oamv
-from quant_strategy.strategy_b2 import generate_b2_signals
+from quant_strategy.strategy_spring import generate_spring_signals
 
 FEAT_DIR = os.path.join(BASE, 'ML_optimization', 'features')
 OUT_DIR = os.path.join(BASE, 'ML_optimization')
@@ -202,7 +202,7 @@ def load_and_extract_signals(parquet_path, oamv_index):
         if len(sdf) < 60:
             return None
 
-        sdf = generate_b2_signals(sdf, board_type='main', precomputed=True,
+        sdf = generate_spring_signals(sdf, board_type='main', precomputed=True,
                                    params=OPTIMAL_PARAMS)
 
         # Find signal points

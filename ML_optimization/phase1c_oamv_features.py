@@ -174,7 +174,7 @@ def main():
     if not has_b2:
         # Need to compute B2 signals first. Use the full pipeline from Phase 1.
         print("  Computing B2 signals on all stocks (this takes a few minutes)...")
-        from quant_strategy.strategy_b2 import generate_b2_signals
+        from quant_strategy.strategy_spring import generate_spring_signals
 
         all_dfs = []
         n_done = 0
@@ -393,8 +393,8 @@ def _load_and_compute_b2(parquet_path):
             if col in df.columns:
                 ohlcv[col] = df[col].values
 
-        from quant_strategy.strategy_b2 import generate_b2_signals
-        ohlcv = generate_b2_signals(ohlcv, board_type='main', precomputed=True)
+        from quant_strategy.strategy_spring import generate_spring_signals
+        ohlcv = generate_spring_signals(ohlcv, board_type='main', precomputed=True)
 
         for col in ['b2_entry_signal', 'b2_position_weight', 'b2_prior_strong',
                      'b2_stop_signal', 'b2_state', 'b2_brick_resonance']:

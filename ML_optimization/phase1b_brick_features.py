@@ -30,7 +30,7 @@ BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BASE)
 
 from quant_strategy.strategy_brick import generate_brick_signals
-from quant_strategy.strategy_b2 import generate_b2_signals
+from quant_strategy.strategy_spring import generate_spring_signals
 
 FEAT_DIR = os.path.join(BASE, 'ML_optimization', 'features')
 OUT_DIR = os.path.join(BASE, 'ML_optimization')
@@ -107,7 +107,7 @@ def load_and_compute_both(parquet_path):
                 ohlcv[col] = df[col].values
 
         # Compute B2 signals first
-        ohlcv = generate_b2_signals(ohlcv, board_type='main', precomputed=True)
+        ohlcv = generate_spring_signals(ohlcv, board_type='main', precomputed=True)
 
         # Compute brick signals (adds brick_entry_signal, brick_pattern, etc.)
         ohlcv = generate_brick_signals(ohlcv, board_type='main', precomputed=True)

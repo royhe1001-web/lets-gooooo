@@ -6,7 +6,7 @@
 
 用法:
   python run_trade_report.py                              # 默认读取最新模拟结果
-  python run_trade_report.py --input output/b2_simulation_2026.csv
+  python run_trade_report.py --input output/spring_simulation_2026.csv
 """
 
 import argparse, os, sys, warnings
@@ -18,8 +18,8 @@ warnings.filterwarnings('ignore')
 BASE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(BASE)
 OUT = os.path.join(ROOT, 'output')
-NAV_FILE = os.path.join(OUT, 'b2_simulation_2026_nav.csv')
-TRADE_FILE = os.path.join(OUT, 'b2_simulation_2026.csv')
+NAV_FILE = os.path.join(OUT, 'spring_simulation_2026_nav.csv')
+TRADE_FILE = os.path.join(OUT, 'spring_simulation_2026.csv')
 BENCHMARK_FILE = os.path.join(OUT, 'csi300_5y.csv')
 
 RISK_FREE = 0.02

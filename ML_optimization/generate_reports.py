@@ -1,6 +1,6 @@
 """
 Generate daily NAV, daily positions, and trade report for the best
-Pullback+OAMV+None config on Test 2026.
+Explosive_def2.0+None config on Test 2026.
 """
 import os, sys, json, copy
 import pandas as pd
@@ -22,12 +22,12 @@ TEST_START = pd.Timestamp('2026-01-01')
 TEST_END   = pd.Timestamp('2026-05-07')
 MktCap_MIN = 500
 MktCap_MAX = 1000
-BEST_B2_NAME = 'Pullback+OAMV'
+BEST_SPRING_NAME = 'Explosive_def2.0'
 
 OUT_DIR = os.path.join(BASE, 'output')
 
 print("=" * 60)
-print("  Generating Reports: Pullback+OAMV+None on Test 2026")
+print("  Generating Reports: Explosive_def2.0+None on Test 2026")
 print("=" * 60)
 
 # ── Load OAMV ───────────────────────────────────────────────────────
@@ -41,14 +41,14 @@ print(f"  OAMV: {len(oamv_df)} days")
 param_sets = build_param_sets()
 best_ps = None
 for ps in param_sets:
-    if ps['name'] == BEST_B2_NAME:
+    if ps['name'] == BEST_SPRING_NAME:
         best_ps = ps
         break
 if best_ps is None:
-    raise ValueError(f"Param set '{BEST_B2_NAME}' not found")
+    raise ValueError(f"Param set '{BEST_SPRING_NAME}' not found")
 
 b2_params, oamv_params = _prepare_oamv_and_b2_params(best_ps)
-print(f"  B2: {BEST_B2_NAME}")
+print(f"  B2: {BEST_SPRING_NAME}")
 
 # ── Load eligible stocks (SAME as grid search: union across ALL periods) ─
 print("\n[2/5] Loading eligible stocks...")
@@ -264,7 +264,7 @@ print(f"  Git status: {status if status else 'no changes'}")
 
 if status:
     run_git('git add output/report_daily_nav.csv output/report_daily_positions.csv output/report_trades.csv output/report_closed_positions.csv')
-    commit_msg = f'[auto] Pullback+OAMV+None Test2026 reports — Ret+{metrics["total_return_pct"]:.1f}% Sharpe{metrics["sharpe"]:.3f}'
+    commit_msg = f'[auto] Explosive_def2.0+None Test2026 reports — Ret+{metrics["total_return_pct"]:.1f}% Sharpe{metrics["sharpe"]:.3f}'
     run_git(f'git commit -m "{commit_msg}"')
     run_git('git push origin main')
     print(f"  Pushed to GitHub: royhe1001-web/lets-gooooo")
