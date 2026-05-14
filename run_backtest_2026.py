@@ -145,6 +145,14 @@ def main():
     tl.to_csv(_os.path.join(report_dir, 'trade_log.csv'), index=False)
     print(f'  trade_log: {report_dir}/trade_log.csv ({len(tl)} 条)')
 
+    # 生成 Excel 报告
+    try:
+        import subprocess, sys
+        subprocess.run([sys.executable, _os.path.join(BASE, 'generate_report_xlsx.py')],
+                       cwd=BASE, check=True, capture_output=True)
+    except Exception as e:
+        print(f'  Excel: {e}')
+
     print()
 
 
