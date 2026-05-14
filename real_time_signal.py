@@ -348,17 +348,14 @@ def load_positions(manual_path=None):
     return load_backtest_positions()
 
 
-def _load_yesterday_close(symbols):
-    """从K线读取昨收价, 返回{sym: close}"""
-    from pathlib import Path as _P
-    kline_dir = _P('output/kline')
+def _load_yesterday_close(symbols, rt_df):
+    """从新浪实时行情读取昨收价, 返回{sym: close}"""
     result = {}
     for sym in symbols:
-        kf = kline_dir / f'{sym}.csv'
-        if kf.exists():
-            df = pd.read_csv(kf, parse_dates=['date'])
-            if not df.empty and 'close' in df.columns:
-                result[sym] = float(df['close'].iloc[-1])
+        if sym in rt_df.index:
+            pre = rt_df.loc[sym, 'pre_close']
+            if not pd.isna(pre) and pre > 0:
+                result[sym] = float(pre)
     return result
 
 
@@ -502,6 +499,11 @@ class RealtimeDecisionEngine:
         all_signals = []
         for code, df in self.stock_data.items():
             try:
+                # ST/退市风险过滤
+                if code in self.rt_df.index:
+                    name = str(self.rt_df.loc[code, 'name'])
+                    if 'ST' in name or '*ST' in name:
+                        continue
                 if self.today not in df.index:
                     continue
                 sdf = df.iloc[-120:].copy()
@@ -896,7 +898,7 @@ def main():
         all_syms.append(b['symbol'])
     for h in decision.get('holds', []):
         all_syms.append(h['symbol'])
-    yesterday_close = _load_yesterday_close(all_syms)
+    yesterday_close = _load_yesterday_close(all_syms, rt_df)
     yesterday_equity = _load_yesterday_equity()
 
     # --- 卖出 ---
@@ -973,7 +975,7 @@ def main():
 
     # P15: 执行价格警告
     if decision['buys']:
-        print(f'\n  ⚠ 实盘执行: 14:50 生成信号 → 14:57 提交收盘竞价单 → 15:00 收盘价成交')
+        print(f'\n  [!] 实盘执行: 14:50 生成信号 → 14:57 提交收盘竞价单 → 15:00 收盘价成交')
         print(f'    (勿用 T+1 开盘价, 滑点会吃掉超额)')
 
     # 保存
