@@ -25,14 +25,10 @@
 
 ---
 
-## 问题3: K线数据被加载两次
+## 问题3: 实时行情融合耗时 ~4s
 
 **现象**: 日志出现两行 `K线: 2113 只 (8.1s)` 和 `K线: 2113 只 (12.6s)`
 
-**根因**: 
-- 第一次: `load_kline_with_realtime` (并行加载，8.1s)
-- 第二次: `OAMVSimEngine.__init__` 内部调用 `preload_stock_data` 再加载一次 (12.6s 单线程)
+**根因**: 不是加载两次。第一次是并行读取 parquet（8s），第二次是本函数总耗时（含融合实时行情）。`load_kline_with_realtime` 中的融合循环是串行的——2113 只逐个 `pd.concat` + `sort_index`，多耗 ~4-5s。
 
-**影响**: 浪费 ~13s，总耗时从可能的 25s 增加到 37s
-
-**建议**: `OAMVSimEngine` 接受已加载的 `stock_data` 参数，跳过二次加载
+**建议**: 用字典更新代替 concat（`df.loc[today] = row` 比 `pd.concat` 快很多），或批量 concat
