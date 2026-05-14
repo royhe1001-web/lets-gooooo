@@ -150,9 +150,52 @@ def get_stock_universe():
     return codes, mktcap_lookup, percentiles
 
 
+def _load_one_parquet(args):
+    """单文件加载, 供并行调用"""
+    f, eligible_codes, needed_cols = args
+    code = os.path.basename(f).replace('.parquet', '')
+    if code not in eligible_codes:
+        return None
+    try:
+        df = pd.read_parquet(f)
+        cols_avail = [c for c in needed_cols if c in df.columns]
+        df = df[cols_avail].copy()
+        df['date'] = pd.to_datetime(df['date'])
+        df = df.set_index('date').sort_index()
+        if len(df) >= 120:
+            return (code, df)
+    except Exception:
+        pass
+    return None
+
+
 def load_kline_with_realtime(codes, rt_df):
-    from ML_optimization.phase2c_bull_grid_search import preload_stock_data
-    stock_data = preload_stock_data(codes)
+    """并行加载K线 + 融合实时行情"""
+    from ML_optimization.phase2c_bull_grid_search import _get_stock_files_mainboard, NEEDED_COLS_S2
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    t0 = time.time()
+    files = _get_stock_files_mainboard()
+    needed = NEEDED_COLS_S2
+    stock_data = {}
+
+    # 并行读取 parquet
+    args = [(f, codes, needed) for f in files]
+    with ThreadPoolExecutor(max_workers=8) as ex:
+        futures = {ex.submit(_load_one_parquet, a): a[0] for a in args}
+        loaded = 0
+        for fut in as_completed(futures):
+            result = fut.result()
+            if result is not None:
+                code, df = result
+                stock_data[code] = df
+                loaded += 1
+                if loaded % 500 == 0:
+                    print(f"  Loaded {loaded} stocks...")
+
+    print(f"  K线: {loaded} 只 ({time.time()-t0:.1f}s)")
+
+    # 融合实时行情
     today = pd.Timestamp.now().normalize()
     for code in list(stock_data.keys()):
         df = stock_data[code]
