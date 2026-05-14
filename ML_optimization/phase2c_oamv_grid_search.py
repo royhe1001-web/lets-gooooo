@@ -487,14 +487,8 @@ class OAMVSimEngine:
                 'regime': regime,
             })
 
-        final_date = all_trading_dates[-1] if all_trading_dates else SIM_END
-        for code in list(self.positions.keys()):
-            price = self.get_price(code, final_date, 'close')
-            if price is None:
-                price = self.get_price(code, final_date, 'open')
-            if price is not None:
-                self.sell(code, final_date, price, 'final_clear')
-
+        # 不再强制清仓: 让持仓自然保留, 供实时信号桥接读取
+        # 末期净值通过 calc_portfolio_value 按市价计入
         return self._compute_metrics()
 
     def export_trade_log(self):
