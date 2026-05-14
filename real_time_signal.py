@@ -361,6 +361,20 @@ def _load_yesterday_close(symbols, rt_df):
     return result
 
 
+def _load_yesterday_cash():
+    """读取回测最近一天现金"""
+    nav_csv = os.path.join(BACKTEST_DIR, 'daily_nav.csv')
+    if os.path.exists(nav_csv):
+        nav = pd.read_csv(nav_csv)
+        if not nav.empty:
+            if 'oamv_divergence' in nav.columns:
+                real = nav[nav['oamv_divergence'] != 'realtime_preview']
+                if not real.empty:
+                    return float(real.iloc[-1]['cash'])
+            return float(nav.iloc[-1].get('cash', 0))
+    return 0.0
+
+
 def _load_yesterday_equity():
     """读取回测最近一天总权益(作为今日基线)"""
     nav_csv = os.path.join(BACKTEST_DIR, 'daily_nav.csv')
@@ -426,12 +440,13 @@ def push_to_backtest(decision, regime, oamv_score, today_str, positions_after):
         p.get('shares', 0) * p.get('buy_price', 0)
         for p in positions_after.values()
     )
-    eq = DEFAULT_CAPITAL * 0.3 + pos_val  # 粗略: 现金占30%
+    cash_est = decision.get('cash', DEFAULT_CAPITAL * 0.3)
+    eq = cash_est + pos_val
 
     nav_row = {
         'date': today_str,
         'total_equity': eq,
-        'cash': eq - pos_val,
+        'cash': cash_est,
         'position_value': pos_val,
         'n_positions': len(positions_after),
         'oamv_state': regime,
@@ -683,6 +698,19 @@ class RealtimeDecisionEngine:
                 'has_flown': pos.get('has_flown', False),
             }
 
+        # 初始现金: 从回测读取, 异常则估算
+        init_cash = _load_yesterday_cash()
+        if init_cash <= 0:
+            # fallback: 从回测总权益和当前持仓市值估算
+            yesterday_eq = _load_yesterday_equity()
+            held_val = sum(
+                p.get('shares', 0) * self._get_price(c, self.today)
+                for c, p in positions_dict.items()
+            )
+            init_cash = max(DEFAULT_CAPITAL * 0.3, yesterday_eq - held_val)
+            if init_cash <= 0:
+                init_cash = DEFAULT_CAPITAL * 0.3
+
         regime = self._get_oamv_regime(self.today)
         is_defensive = (regime == 'defensive' and
                         self.oamv_params.get('oamv_defensive_ban_entry', True))
@@ -713,7 +741,7 @@ class RealtimeDecisionEngine:
                 'sells': sell_list, 'buys': [], 'holds': holds,
                 'regime': regime, 'candidates': 0,
                 'is_defensive': is_defensive, 'is_rebalance': False,
-                'position_value': pos_val, 'cash': 0.0,
+                'position_value': pos_val, 'cash': init_cash,
             }
 
         # 2. 调仓日: 状态切换额外卖出
@@ -787,26 +815,35 @@ class RealtimeDecisionEngine:
                     'days_held': (self.today - pos['buy_date']).days,
                 })
 
-        # 计算持仓市值(含今日买入)
+        # 计算持仓市值 + 实际现金
+        commission = 0.0003
+        cash = init_cash
+        # 卖出回款
+        for code, reason in sell_list:
+            px = self._get_price(code, self.today)
+            if px and code in positions_dict:
+                sh = positions_dict[code].get('shares', 0)
+                cash += sh * px * (1 - commission)
+        # 买入扣款
+        for b in buy_list:
+            cash -= b['amount']
+
         pos_val = 0.0
-        all_held = set(positions_dict.keys()) - {s[0] for s in sell_list}
-        all_held |= {b['symbol'] for b in buy_list}
+        all_held = (set(positions_dict.keys()) - {s[0] for s in sell_list}) | {b['symbol'] for b in buy_list}
         for code in all_held:
             px = self._get_price(code, self.today)
-            if code in positions_dict:
+            if code in positions_dict and code not in [s[0] for s in sell_list]:
                 shares = positions_dict[code].get('shares', 0)
             else:
                 shares = next((b['shares'] for b in buy_list if b['symbol'] == code), 0)
             if px and shares > 0:
                 pos_val += px * shares
-        # 估算现金: 总权益-持仓市值 (简化)
-        yesterday_eq = _load_yesterday_equity()
-        cash_est = max(0, yesterday_eq - pos_val) if yesterday_eq > 0 else 0
+
         return {
             'sells': sell_list, 'buys': buy_list, 'holds': holds,
             'regime': regime, 'candidates': len(raw_signals),
             'is_defensive': is_defensive, 'is_rebalance': True,
-            'position_value': pos_val, 'cash': cash_est,
+            'position_value': pos_val, 'cash': cash,
         }
 
 
