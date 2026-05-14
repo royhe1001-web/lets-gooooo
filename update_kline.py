@@ -116,18 +116,9 @@ def main():
     if min_date is None: min_date = pd.Timestamp('2026-05-07')
     print(f'数据到: {min_date.date()} | 共 {len(files)} 文件')
 
-    import sys as _sys
-    force_recalc = '--recalc' in _sys.argv
-
     today = pd.Timestamp.now()
-    if min_date.date() >= today.date() and not force_recalc:
-        print('数据已最新 (--recalc 强制重算指标)'); return
-
-    # Recalc-only: Mac端暂禁用 (指标计算与Win端不一致)
-    # 如需重算NaN指标, 由Win端推送已算好的parquet文件
-    if force_recalc:
-        print('--recalc: Mac端暂不支持指标重算, 请由Win端推送parquet文件')
-        return
+    if min_date.date() >= today.date():
+        print('数据已最新'); return
 
     start_d = min_date + pd.Timedelta(days=1)
     end_d = today
