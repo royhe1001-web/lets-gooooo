@@ -70,7 +70,8 @@ class OAMVSimEngine:
         self.cash = DEFAULT_CAPITAL
         self.initial_capital = DEFAULT_CAPITAL
         self.max_positions = 4
-        self.min_positions = 3
+        self.min_positions = 0   # allow empty in defensive
+        self._last_check_date = None
         self.max_entries_per_day = oamv_params.get('max_entries_per_day', 3)
 
         # B+C+D filter support (Phase 1 validation)
@@ -121,8 +122,11 @@ class OAMVSimEngine:
             return float(df.loc[prev[-1], price_type])
         return None
 
-    def extract_signals(self):
-        """Extract B2 signals with 0AMV regime embedded in each stock's DataFrame."""
+    def extract_signals(self, lookback=None):
+        """Extract B2 signals with 0AMV regime embedded in each stock's DataFrame.
+
+        lookback: 仅处理最近N个交易日 (实时模式用120, 回测用None=全量)
+        """
         all_signals = []
         agg_buf = self.oamv_params.get('oamv_aggressive_buffer', 0.95)
         def_buf = self.oamv_params.get('oamv_defensive_buffer', 0.99)
@@ -130,20 +134,17 @@ class OAMVSimEngine:
 
         for code, df in self.stock_data.items():
             try:
-                sdf = df.copy()
+                # 实时加速: 只取最近N天, 但至少保留足够的指标计算窗口
+                if lookback and len(df) > lookback + 60:
+                    sdf = df.iloc[-lookback - 60:].copy()
+                else:
+                    sdf = df.copy()
 
                 # Embed 0AMV regime into DataFrame for generate_spring_signals
                 regimes = []
                 for idx in sdf.index:
                     regimes.append(self._get_oamv_regime(idx))
                 sdf['oamv_regime'] = regimes
-
-                # Embed sector momentum score (same pattern as OAMV regime)
-                if self.sector_lookup:
-                    stock_map = self.sector_lookup['stock_board_map']
-                    board_mom = self.sector_lookup['board_momentum']
-                    sector_scores = [get_sector_score(code, idx, stock_map, board_mom) for idx in sdf.index]
-                    sdf['sector_momentum_score'] = sector_scores
 
                 # Generate B2 signals with 0AMV-aware params
                 b2p = copy.deepcopy(self.b2_params)
@@ -220,12 +221,28 @@ class OAMVSimEngine:
         return min(self.positions.values(), key=lambda p: p.signal_weight)
 
     def calc_position_size(self, signal_weight, buy_price):
-        base = self.cash / max(self.min_positions, 1)
-        wf = min(signal_weight / 2.0, 2.0)
-        alloc = min(base * wf, self.cash * 0.95)
+        # P15: 基于总权益(现金+持仓市值)分配, 利润自动再投资
+        total_eq = self.cash
+        for code, pos in self.positions.items():
+            px = self.get_price(code, self._last_check_date, 'close')
+            if px is None:
+                px = pos.buy_price
+            total_eq += px * pos.shares
+        capital = max(total_eq, self.initial_capital)
+
+        # P15: 牛市集中 — 剩余仓位越少单票越大
+        slots_open = max(1, self.max_positions - len(self.positions) + 1)
+        base = capital / slots_open
+        wf = min(signal_weight / 2.0, 2.5)
+        # 单票上限50%基于当前总权益, 利润越大仓位越大
+        alloc = min(base * wf, capital * 0.50)
+        # 实际不超可用现金
+        alloc = min(alloc, self.cash * 0.98)
+
         shares = int(alloc / buy_price / 100) * 100
-        if shares < 100:
-            shares = 100 if self.cash >= buy_price * 100 * 1.01 else 0
+        # P15: min_single_amount ≥ 8000
+        if shares < 100 or shares * buy_price < 8000:
+            return 0
         return shares
 
     def buy(self, signal):
@@ -261,6 +278,7 @@ class OAMVSimEngine:
             'price': buy_price, 'shares': shares, 'cost': cost,
             'weight': signal['weight'], 'cash_after': self.cash,
             'regime': signal.get('regime', 'normal'),
+            'sector_score': signal.get('sector_momentum_score', signal.get('b2_sector_score', None)),
         })
         return True
 
@@ -407,19 +425,32 @@ class OAMVSimEngine:
         if not signals:
             return self._empty_result()
 
+        # Build all trading dates in simulation range (for accurate MaxDD)
         all_dates = set()
         for s in signals:
             all_dates.add(s['signal_date'])
             all_dates.add(s['t1_date'])
-        trading_dates = sorted(d for d in all_dates
-                               if SIM_START <= d <= SIM_END + pd.Timedelta(days=10))
+        sim_dates = sorted(d for d in all_dates)
+        # Use real A-share trading dates from OAMV index (not US BDay)
+        oamv_dates_in_range = [d for d in self.oamv_df.index
+                               if sim_dates[0] <= d <= sim_dates[-1]]
+        all_trading_dates = sorted(set(oamv_dates_in_range) | set(sim_dates))
+
+        # Pre-index signals by t1_date
+        sigs_by_t1 = {}
+        for s in signals:
+            sigs_by_t1.setdefault(s['t1_date'], []).append(s)
 
         pending = []
-        entries_today = 0
-        for date in trading_dates:
+        for date in all_trading_dates:
             self.check_stops(date)
             regime = self._get_oamv_regime(date)
-            entries_today = 0  # reset daily counter
+            self._last_check_date = date
+            entries_today = 0
+
+            # Process new signals on this date
+            new_sigs = sigs_by_t1.get(date, [])
+            pending.extend(new_sigs)
 
             still_pending = []
             for s in pending:
@@ -430,41 +461,25 @@ class OAMVSimEngine:
                 if entries_today >= self.max_entries_per_day:
                     still_pending.append(s)
                     continue
-                # Check defensive ban
                 if regime == 'defensive' and self.oamv_params.get('oamv_defensive_ban_entry', True):
                     still_pending.append(s)
                     continue
                 if self.can_add_position(s['weight']):
-                    self.buy(s)
-                    entries_today += 1
+                    if self.buy(s):
+                        entries_today += 1
+                    else:
+                        still_pending.append(s)
                     continue
                 elif self.rotate_if_needed(s):
-                    self.buy(s)
-                    entries_today += 1
+                    if self.buy(s):
+                        entries_today += 1
+                    else:
+                        still_pending.append(s)
                     continue
                 still_pending.append(s)
             pending = still_pending
 
-            new_sigs = [s for s in signals if s['t1_date'] == date]
-            for sig in new_sigs:
-                if sig['code'] in self.positions:
-                    continue
-                if entries_today >= self.max_entries_per_day:
-                    pending.append(sig)
-                    continue
-                if regime == 'defensive' and self.oamv_params.get('oamv_defensive_ban_entry', True):
-                    pending.append(sig)
-                    continue
-                if self.can_add_position(sig['weight']):
-                    self.buy(sig)
-                    entries_today += 1
-                    continue
-                elif self.rotate_if_needed(sig):
-                    self.buy(sig)
-                    entries_today += 1
-                    continue
-                pending.append(sig)
-
+            # Record equity daily (P15: accurate MaxDD tracking)
             total_value = self.calc_portfolio_value(date)
             self.daily_values.append({
                 'date': date, 'value': total_value,
@@ -472,7 +487,7 @@ class OAMVSimEngine:
                 'regime': regime,
             })
 
-        final_date = trading_dates[-1] if trading_dates else SIM_END
+        final_date = all_trading_dates[-1] if all_trading_dates else SIM_END
         for code in list(self.positions.keys()):
             price = self.get_price(code, final_date, 'close')
             if price is None:
@@ -481,6 +496,25 @@ class OAMVSimEngine:
                 self.sell(code, final_date, price, 'final_clear')
 
         return self._compute_metrics()
+
+    def export_trade_log(self):
+        """导出 trade_log 为 DataFrame（供回测持仓重建）"""
+        import pandas as pd
+        rows = []
+        for t in self.trade_log:
+            if t['action'] == 'BUY':
+                rows.append({
+                    'date': t['date'], 'symbol': t['code'], 'action': 'BUY',
+                    'shares': t['shares'], 'price': t['price'], 'cost': t['cost'],
+                    'weight': t.get('weight', 1.0),
+                })
+            elif t['action'] == 'SELL':
+                rows.append({
+                    'date': t['date'], 'symbol': t['code'], 'action': 'SELL',
+                    'shares': t.get('shares', 0), 'price': t['price'],
+                    'reason': t.get('reason', ''),
+                })
+        return pd.DataFrame(rows)
 
     def _empty_result(self):
         return {'total_return': 0, 'total_return_pct': 0, 'sharpe': 0,
@@ -495,9 +529,15 @@ class OAMVSimEngine:
         max_dd = 0
         if len(self.daily_values) > 1:
             vals = self.daily_values
-            peak = max(v['value'] for v in vals)
-            peak_i = next(i for i, v in enumerate(vals) if v['value'] == peak)
-            max_dd = (peak - min(v['value'] for v in vals[peak_i:])) / peak if peak > 0 else 0
+            # MaxDD from ANY peak to any subsequent trough
+            peak_so_far = vals[0]['value']
+            for v in vals[1:]:
+                if v['value'] > peak_so_far:
+                    peak_so_far = v['value']
+                else:
+                    dd = (peak_so_far - v['value']) / peak_so_far
+                    if dd > max_dd:
+                        max_dd = dd
             rets = []
             for i in range(1, len(vals)):
                 rets.append(vals[i]['value'] / vals[i-1]['value'] - 1)
@@ -605,7 +645,7 @@ EXPLOSIVE_B2 = {
     'weight_pullback': 1.2, 'weight_shadow_discount_thresh': 0.015,
     'weight_shadow_discount': 0.7, 'weight_strong_discount': 0.8,
     'weight_brick_resonance': 1.5,
-    'sector_momentum_enabled': True,
+    'sector_momentum_enabled': False,
     'sector_weight_strong': 1.15,
     'sector_weight_weak': 0.85,
 }
@@ -621,6 +661,7 @@ PULLBACK_B2 = {
     'weight_pullback': 1.5, 'weight_shadow_discount_thresh': 0.015,
     'weight_shadow_discount': 0.7, 'weight_strong_discount': 0.8,
     'weight_brick_resonance': 1.5,
+    'sector_momentum_enabled': False,
 }
 
 DEFAULT_B2 = {
@@ -634,6 +675,7 @@ DEFAULT_B2 = {
     'weight_pullback': 1.2, 'weight_shadow_discount_thresh': 0.015,
     'weight_shadow_discount': 0.7, 'weight_strong_discount': 0.8,
     'weight_brick_resonance': 1.5,
+    'sector_momentum_enabled': False,
 }
 
 
@@ -710,15 +752,39 @@ def build_param_sets():
               'oamv_defensive_ban_entry': True})
     sets.append({'name': 'OAMV_Conservative', 'b2': copy.deepcopy(EXPLOSIVE_B2), 'oamv': o})
 
-    # 17-19: Sector momentum variants on Explosive B2
-    for s_strong, s_weak, s_tag in [(1.10, 0.90, 'SectorMild'),
-                                     (1.15, 0.85, 'SectorStd'),
-                                     (1.20, 0.80, 'SectorAggr')]:
+    # Sector momentum variants (7 configs × 2 B2 bases = 14)
+    SECTOR_CONFIGS = [
+        ('SectorOff',    False, None,  None),   # 无板块动量对照
+        ('SectorWide',   True,  1.25,  0.75),   # 极宽区间
+        ('SectorAggr',   True,  1.20,  0.80),   # 激进
+        ('SectorStd',    True,  1.15,  0.85),   # 标准（原默认）
+        ('SectorMild',   True,  1.10,  0.90),   # 温和
+        ('SectorTight',  True,  1.05,  0.95),   # 极窄区间
+        ('SectorUpOnly', True,  1.20,  0.90),   # 非对称：强加多弱折少
+    ]
+    # B2 base 1: Explosive_def2.0
+    base_oamv_explosive = copy.deepcopy(default_oamv)
+    base_oamv_explosive['oamv_defensive_threshold'] = -2.0
+    for tag, enabled, strong, weak in SECTOR_CONFIGS:
         b2 = copy.deepcopy(EXPLOSIVE_B2)
-        b2['sector_weight_strong'] = s_strong
-        b2['sector_weight_weak'] = s_weak
-        sets.append({'name': f'Explosive_{s_tag}', 'b2': b2,
-                     'oamv': copy.deepcopy(default_oamv)})
+        b2['sector_momentum_enabled'] = enabled
+        if strong is not None:
+            b2['sector_weight_strong'] = strong
+        if weak is not None:
+            b2['sector_weight_weak'] = weak
+        sets.append({'name': f'Explosive_{tag}', 'b2': b2,
+                     'oamv': copy.deepcopy(base_oamv_explosive)})
+
+    # B2 base 2: OAMV_Conservative (o from above = conservative OAMV params)
+    for tag, enabled, strong, weak in SECTOR_CONFIGS:
+        b2 = copy.deepcopy(EXPLOSIVE_B2)
+        b2['sector_momentum_enabled'] = enabled
+        if strong is not None:
+            b2['sector_weight_strong'] = strong
+        if weak is not None:
+            b2['sector_weight_weak'] = weak
+        sets.append({'name': f'OAMV_Conservative_{tag}', 'b2': b2,
+                     'oamv': copy.deepcopy(o)})
 
     return sets
 

@@ -10,7 +10,7 @@ Supports two filtering modes:
 import os, pickle, numpy as np, pandas as pd
 
 BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-MktCap_PATH = os.path.join(BASE, 'output', 'monthly_mktcap_full.csv')
+MktCap_PATH = os.path.join(BASE, 'output', 'monthly_mktcap.csv')
 MktCap_CACHE = os.path.join(BASE, 'output', 'mktcap_lookup.pkl')
 PCT_CACHE = os.path.join(BASE, 'output', 'mktcap_percentiles.pkl')
 

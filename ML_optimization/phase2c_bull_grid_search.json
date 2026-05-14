@@ -1,17 +1,12 @@
 {
   "phase": "2c_bull_grid_search",
-  "date": "2026-05-12",
+  "engine": "OAMVSimEngine",
   "date_ranges": {
     "train": [
       {
         "name": "Bull1_2014-2015",
         "start": "2014-07-01",
         "end": "2015-06-12"
-      },
-      {
-        "name": "Range_2016-2017",
-        "start": "2016-01-01",
-        "end": "2017-12-31"
       },
       {
         "name": "Bull2_2020-2021",
@@ -29,452 +24,294 @@
   },
   "stage1_top5": [
     {
-      "name": "OAMV_Conservative",
-      "z": 0.011700248740895296,
-      "n_signals": 4936
-    },
-    {
-      "name": "Explosive_def2.0",
-      "z": 0.01169768625966104,
-      "n_signals": 4940
-    },
-    {
       "name": "Explosive_agg2.5",
-      "z": 0.01097633449446505,
-      "n_signals": 5098
+      "z": 0.017327672092426596,
+      "n_signals": 1317
     },
     {
       "name": "OAMV_Aggressive",
-      "z": 0.01097633449446505,
-      "n_signals": 5098
+      "z": 0.017327672092426596,
+      "n_signals": 1317
     },
     {
-      "name": "Explosive_agg3.5",
-      "z": 0.010956077456500894,
-      "n_signals": 5068
+      "name": "Explosive_def2.0",
+      "z": 0.017068225986955045,
+      "n_signals": 1200
+    },
+    {
+      "name": "Explosive_SectorOff",
+      "z": 0.017068225986955045,
+      "n_signals": 1200
+    },
+    {
+      "name": "Explosive_SectorTight",
+      "z": 0.017061131021131465,
+      "n_signals": 1200
     }
   ],
   "stage2_grid_top10": [
     {
-      "b2_name": "OAMV_Aggressive",
-      "stop_profile": "Tight",
-      "sharpe": 1.4914893775909766,
-      "total_return": 2.669394947500022,
-      "total_return_pct": 266.9394947500022,
-      "win_rate": 0.37575049158168744,
-      "max_dd": 0.42270335566695816,
-      "n_trades": 1978,
-      "stop_counts": {
-        "sig": 670,
-        "rotate": 213,
-        "candle": 518,
-        "trail": 342,
-        "take": 55,
-        "peak": 145,
-        "final": 23,
-        "hard": 4,
-        "yellow": 7,
-        "time": 1
-      }
-    },
-    {
-      "b2_name": "OAMV_Conservative",
-      "stop_profile": "Tight",
-      "sharpe": 1.403023801990151,
-      "total_return": 2.5826663715000198,
-      "total_return_pct": 258.266637150002,
-      "win_rate": 0.37752952139784773,
-      "max_dd": 0.2481636450509253,
-      "n_trades": 1844,
-      "stop_counts": {
-        "sig": 545,
-        "rotate": 212,
-        "candle": 533,
-        "trail": 331,
-        "take": 52,
-        "peak": 136,
-        "final": 23,
-        "hard": 4,
-        "yellow": 7,
-        "time": 1
-      }
-    },
-    {
       "b2_name": "Explosive_def2.0",
-      "stop_profile": "Tight",
-      "sharpe": 1.4019733787726827,
-      "total_return": 2.6539778780000196,
-      "total_return_pct": 265.39778780000194,
-      "win_rate": 0.38084215748363753,
-      "max_dd": 0.2481636450509253,
-      "n_trades": 1845,
+      "stop_profile": "None",
+      "sharpe": 0.5967373711804884,
+      "total_return": 0.8629680330000029,
+      "total_return_pct": 86.29680330000029,
+      "win_rate": 0.17551789077212807,
+      "max_dd": 0.39405205250918374,
+      "n_trades": 387,
       "stop_counts": {
-        "sig": 567,
-        "rotate": 212,
-        "candle": 509,
-        "trail": 332,
-        "take": 54,
-        "peak": 136,
-        "final": 23,
-        "hard": 4,
-        "yellow": 7,
-        "time": 1
+        "sig": 208,
+        "rotate": 32,
+        "candle": 80,
+        "yellow": 52,
+        "60d": 1,
+        "final": 14
       }
     },
     {
-      "b2_name": "Explosive_def2.0",
-      "stop_profile": "Medium",
-      "sharpe": 1.3672954822554924,
-      "total_return": 2.2722949195000153,
-      "total_return_pct": 227.22949195000152,
-      "win_rate": 0.36993396129233447,
-      "max_dd": 0.2060036489367167,
-      "n_trades": 1585,
+      "b2_name": "Explosive_SectorOff",
+      "stop_profile": "None",
+      "sharpe": 0.5967373711804884,
+      "total_return": 0.8629680330000029,
+      "total_return_pct": 86.29680330000029,
+      "win_rate": 0.17551789077212807,
+      "max_dd": 0.39405205250918374,
+      "n_trades": 387,
       "stop_counts": {
-        "sig": 482,
-        "rotate": 170,
-        "candle": 467,
-        "trail": 197,
-        "take": 109,
-        "peak": 111,
-        "final": 26,
-        "hard": 4,
-        "yellow": 16,
-        "time": 2,
-        "60d": 1
+        "sig": 208,
+        "rotate": 32,
+        "candle": 80,
+        "yellow": 52,
+        "60d": 1,
+        "final": 14
       }
     },
     {
       "b2_name": "OAMV_Aggressive",
-      "stop_profile": "Medium",
-      "sharpe": 1.2555112147840322,
-      "total_return": 2.0784446830000194,
-      "total_return_pct": 207.84446830000195,
-      "win_rate": 0.3689181816527148,
-      "max_dd": 0.27424472709355885,
-      "n_trades": 1701,
+      "stop_profile": "None",
+      "sharpe": 0.41285357619734847,
+      "total_return": 0.6528819400000043,
+      "total_return_pct": 65.28819400000043,
+      "win_rate": 0.17484982155919582,
+      "max_dd": 0.37359522102059156,
+      "n_trades": 426,
       "stop_counts": {
-        "sig": 565,
-        "rotate": 172,
-        "candle": 481,
-        "trail": 208,
-        "take": 109,
-        "peak": 115,
-        "final": 26,
-        "hard": 4,
-        "yellow": 18,
-        "time": 2,
-        "60d": 1
+        "candle": 80,
+        "sig": 242,
+        "rotate": 37,
+        "yellow": 53,
+        "60d": 1,
+        "final": 13
       }
     },
     {
       "b2_name": "Explosive_agg2.5",
-      "stop_profile": "Tight",
-      "sharpe": 1.209513051118919,
-      "total_return": 2.2228633820000208,
-      "total_return_pct": 222.28633820000206,
-      "win_rate": 0.3737927090240433,
-      "max_dd": 0.3937254518874518,
-      "n_trades": 1900,
+      "stop_profile": "None",
+      "sharpe": 0.30027428048000954,
+      "total_return": 0.45546242300000306,
+      "total_return_pct": 45.54624230000031,
+      "win_rate": 0.1666428684753292,
+      "max_dd": 0.388642528082788,
+      "n_trades": 411,
       "stop_counts": {
-        "sig": 601,
-        "rotate": 212,
-        "candle": 526,
-        "trail": 336,
-        "take": 52,
-        "peak": 138,
-        "final": 23,
-        "hard": 4,
-        "yellow": 7,
-        "time": 1
-      }
-    },
-    {
-      "b2_name": "Explosive_agg2.5",
-      "stop_profile": "Medium",
-      "sharpe": 1.2021171477306496,
-      "total_return": 1.993680301500017,
-      "total_return_pct": 199.36803015000172,
-      "win_rate": 0.37057904328327207,
-      "max_dd": 0.2735919213173051,
-      "n_trades": 1623,
-      "stop_counts": {
-        "sig": 498,
-        "rotate": 167,
-        "candle": 483,
-        "trail": 203,
-        "take": 110,
-        "peak": 112,
-        "final": 27,
-        "hard": 4,
-        "yellow": 16,
-        "time": 2,
-        "60d": 1
-      }
-    },
-    {
-      "b2_name": "OAMV_Conservative",
-      "stop_profile": "Medium",
-      "sharpe": 1.1925588371378544,
-      "total_return": 1.9667581460000139,
-      "total_return_pct": 196.6758146000014,
-      "win_rate": 0.37009079703289177,
-      "max_dd": 0.2060036489367167,
-      "n_trades": 1577,
-      "stop_counts": {
-        "sig": 462,
-        "rotate": 171,
-        "candle": 482,
-        "take": 108,
-        "trail": 193,
-        "peak": 112,
-        "final": 26,
-        "hard": 4,
-        "yellow": 16,
-        "time": 2,
-        "60d": 1
-      }
-    },
-    {
-      "b2_name": "Explosive_agg3.5",
-      "stop_profile": "Medium",
-      "sharpe": 1.089910848274816,
-      "total_return": 1.7644037295000135,
-      "total_return_pct": 176.44037295000135,
-      "win_rate": 0.3655876134503284,
-      "max_dd": 0.26776006086045495,
-      "n_trades": 1618,
-      "stop_counts": {
-        "sig": 489,
-        "rotate": 170,
-        "candle": 490,
-        "take": 107,
-        "trail": 197,
-        "peak": 116,
-        "final": 26,
-        "hard": 4,
-        "yellow": 16,
-        "time": 2,
-        "60d": 1
-      }
-    },
-    {
-      "b2_name": "Explosive_agg3.5",
-      "stop_profile": "Tight",
-      "sharpe": 1.0818541353218973,
-      "total_return": 1.9617271465000197,
-      "total_return_pct": 196.17271465000198,
-      "win_rate": 0.3703498347484918,
-      "max_dd": 0.40503484806643214,
-      "n_trades": 1894,
-      "stop_counts": {
-        "sig": 584,
-        "rotate": 208,
-        "candle": 542,
-        "trail": 335,
-        "peak": 138,
-        "take": 52,
-        "final": 23,
-        "hard": 4,
-        "yellow": 7,
-        "time": 1
+        "candle": 82,
+        "sig": 230,
+        "rotate": 34,
+        "yellow": 51,
+        "60d": 1,
+        "final": 13
       }
     }
   ],
   "stage3_val_results": [
     {
-      "total_return": 0.547656151000002,
-      "total_return_pct": 54.7656151000002,
-      "sharpe": 1.5176947524641395,
-      "n_trades": 236,
-      "n_signals": 228,
-      "win_rate": 0.4067796610169492,
+      "total_return": 0.2905112490000006,
+      "total_return_pct": 29.051124900000058,
+      "sharpe": 0.8191046009535843,
+      "n_trades": 49,
+      "n_signals": 49,
+      "win_rate": 0.3469387755102041,
       "max_dd": 0.0,
-      "final_value": 154765.6151000002,
-      "aggressive_buys": 7,
-      "defensive_buys": 5,
-      "normal_buys": 216,
+      "final_value": 129051.12490000005,
+      "aggressive_buys": 9,
+      "defensive_buys": 1,
+      "normal_buys": 39,
       "filter_stats": {
-        "pct_pass": 530,
-        "pct_fail": 652,
+        "pct_pass": 123,
+        "pct_fail": 138,
         "liq_pass": 0,
         "liq_fail": 0,
-        "total_signals": 1182,
-        "filtered_signals": 652
+        "total_signals": 261,
+        "filtered_signals": 138
       },
       "stop_counts": {
-        "sig": 67,
-        "candle": 73,
-        "peak": 11,
-        "trail": 39,
-        "rotate": 30,
-        "take": 11,
-        "final": 5
+        "sig": 25,
+        "rotate": 5,
+        "candle": 7,
+        "yellow": 5,
+        "60d": 1,
+        "final": 6
       },
-      "label": "OAMV_Conservative+Tight",
-      "b2_name": "OAMV_Conservative",
-      "stop_profile": "Tight"
-    },
-    {
-      "total_return": 0.547656151000002,
-      "total_return_pct": 54.7656151000002,
-      "sharpe": 1.5176947524641395,
-      "n_trades": 236,
-      "n_signals": 228,
-      "win_rate": 0.4067796610169492,
-      "max_dd": 0.0,
-      "final_value": 154765.6151000002,
-      "aggressive_buys": 7,
-      "defensive_buys": 5,
-      "normal_buys": 216,
-      "filter_stats": {
-        "pct_pass": 531,
-        "pct_fail": 651,
-        "liq_pass": 0,
-        "liq_fail": 0,
-        "total_signals": 1182,
-        "filtered_signals": 651
-      },
-      "stop_counts": {
-        "sig": 67,
-        "candle": 73,
-        "peak": 11,
-        "trail": 39,
-        "rotate": 30,
-        "take": 11,
-        "final": 5
-      },
-      "label": "Explosive_def2.0+Tight",
-      "b2_name": "Explosive_def2.0",
-      "stop_profile": "Tight"
-    },
-    {
-      "total_return": 0.4909379105000029,
-      "total_return_pct": 49.09379105000029,
-      "sharpe": 1.4011546773044117,
-      "n_trades": 239,
-      "n_signals": 233,
-      "win_rate": 0.39330543933054396,
-      "max_dd": 0.0,
-      "final_value": 149093.7910500003,
-      "aggressive_buys": 16,
-      "defensive_buys": 11,
-      "normal_buys": 206,
-      "filter_stats": {
-        "pct_pass": 536,
-        "pct_fail": 646,
-        "liq_pass": 0,
-        "liq_fail": 0,
-        "total_signals": 1182,
-        "filtered_signals": 646
-      },
-      "stop_counts": {
-        "sig": 76,
-        "candle": 66,
-        "peak": 9,
-        "trail": 41,
-        "rotate": 34,
-        "take": 8,
-        "final": 5
-      },
-      "label": "OAMV_Aggressive+Tight",
+      "label": "OAMV_Aggressive",
       "b2_name": "OAMV_Aggressive",
-      "stop_profile": "Tight"
+      "stop_profile": "None"
+    },
+    {
+      "total_return": 0.1622487900000007,
+      "total_return_pct": 16.22487900000007,
+      "sharpe": 0.42114686538057017,
+      "n_trades": 44,
+      "n_signals": 44,
+      "win_rate": 0.3409090909090909,
+      "max_dd": 0.0,
+      "final_value": 116224.87900000006,
+      "aggressive_buys": 7,
+      "defensive_buys": 1,
+      "normal_buys": 36,
+      "filter_stats": {
+        "pct_pass": 109,
+        "pct_fail": 140,
+        "liq_pass": 0,
+        "liq_fail": 0,
+        "total_signals": 249,
+        "filtered_signals": 140
+      },
+      "stop_counts": {
+        "sig": 23,
+        "rotate": 4,
+        "yellow": 4,
+        "candle": 6,
+        "60d": 1,
+        "final": 6
+      },
+      "label": "Explosive_def2.0",
+      "b2_name": "Explosive_def2.0",
+      "stop_profile": "None"
+    },
+    {
+      "total_return": 0.1622487900000007,
+      "total_return_pct": 16.22487900000007,
+      "sharpe": 0.42114686538057017,
+      "n_trades": 44,
+      "n_signals": 44,
+      "win_rate": 0.3409090909090909,
+      "max_dd": 0.0,
+      "final_value": 116224.87900000006,
+      "aggressive_buys": 7,
+      "defensive_buys": 1,
+      "normal_buys": 36,
+      "filter_stats": {
+        "pct_pass": 109,
+        "pct_fail": 140,
+        "liq_pass": 0,
+        "liq_fail": 0,
+        "total_signals": 249,
+        "filtered_signals": 140
+      },
+      "stop_counts": {
+        "sig": 23,
+        "rotate": 4,
+        "yellow": 4,
+        "candle": 6,
+        "60d": 1,
+        "final": 6
+      },
+      "label": "Explosive_SectorOff",
+      "b2_name": "Explosive_SectorOff",
+      "stop_profile": "None"
     }
   ],
-  "stage4_test": {
-    "best": {
-      "total_return_pct": 18.309667500000202,
-      "sharpe": 0.4236995045991117,
-      "n_trades": 172,
-      "n_signals": 171,
-      "win_rate": 0.3953488372093023,
-      "max_dd": 0.0,
-      "final_value": 118309.6675000002,
-      "aggressive_buys": 8,
-      "defensive_buys": 4,
-      "normal_buys": 159,
-      "filter_stats": {
-        "pct_pass": 490,
-        "pct_fail": 628,
-        "liq_pass": 0,
-        "liq_fail": 0,
-        "total_signals": 1118,
-        "filtered_signals": 628
-      },
-      "stop_counts": {
-        "sig": 50,
-        "rotate": 18,
-        "trail": 30,
-        "candle": 54,
-        "peak": 8,
-        "take": 1,
-        "final": 11
-      },
-      "label": "OAMV_Conservative+Tight"
-    },
-    "baseline": {
-      "total_return_pct": 34.73549120000008,
-      "sharpe": 0.8857218778403367,
-      "n_trades": 85,
-      "n_signals": 85,
-      "win_rate": 0.29411764705882354,
-      "max_dd": 0.04621031438522856,
-      "final_value": 134735.49120000008,
-      "aggressive_buys": 18,
+  "stage4_test_results": [
+    {
+      "total_return_pct": 36.61677640000003,
+      "sharpe": 0.6095406181600344,
+      "n_trades": 68,
+      "n_signals": 68,
+      "win_rate": 0.27941176470588236,
+      "max_dd": 0.2761020212405292,
+      "final_value": 136616.77640000003,
+      "aggressive_buys": 21,
       "defensive_buys": 0,
-      "normal_buys": 67,
+      "normal_buys": 47,
       "filter_stats": {
-        "pct_pass": 517,
-        "pct_fail": 601,
+        "pct_pass": 186,
+        "pct_fail": 132,
         "liq_pass": 0,
         "liq_fail": 0,
-        "total_signals": 1118,
-        "filtered_signals": 601
+        "total_signals": 318,
+        "filtered_signals": 132
       },
       "stop_counts": {
-        "sig": 33,
-        "rotate": 5,
-        "candle": 33,
-        "yellow": 3,
-        "final": 11
+        "rotate": 11,
+        "sig": 42,
+        "candle": 8,
+        "yellow": 1,
+        "final": 6
       },
-      "label": "Explosive_def2.0+None"
+      "label": "OAMV_Aggressive",
+      "b2_name": "OAMV_Aggressive"
     },
-    "old_best": {
-      "total_return_pct": 17.028026900000228,
-      "sharpe": 0.41609531821750045,
-      "n_trades": 180,
-      "n_signals": 179,
-      "win_rate": 0.38333333333333336,
-      "max_dd": 0.018759495642152423,
-      "final_value": 117028.02690000023,
-      "aggressive_buys": 19,
-      "defensive_buys": 7,
-      "normal_buys": 153,
+    {
+      "total_return_pct": 19.57222060000006,
+      "sharpe": 0.33463260488866814,
+      "n_trades": 69,
+      "n_signals": 69,
+      "win_rate": 0.30434782608695654,
+      "max_dd": 0.2708697372942003,
+      "final_value": 119572.22060000006,
+      "aggressive_buys": 21,
+      "defensive_buys": 0,
+      "normal_buys": 48,
       "filter_stats": {
-        "pct_pass": 517,
-        "pct_fail": 601,
+        "pct_pass": 185,
+        "pct_fail": 133,
         "liq_pass": 0,
         "liq_fail": 0,
-        "total_signals": 1118,
-        "filtered_signals": 601
+        "total_signals": 318,
+        "filtered_signals": 133
       },
       "stop_counts": {
-        "sig": 62,
-        "rotate": 21,
-        "candle": 49,
-        "trail": 29,
-        "peak": 8,
-        "take": 1,
-        "final": 10
+        "rotate": 12,
+        "sig": 41,
+        "candle": 9,
+        "yellow": 1,
+        "final": 6
       },
-      "label": "Explosive_def2.0+Tight"
+      "label": "Explosive_def2.0",
+      "b2_name": "Explosive_def2.0"
+    },
+    {
+      "total_return_pct": 19.57222060000006,
+      "sharpe": 0.33463260488866814,
+      "n_trades": 69,
+      "n_signals": 69,
+      "win_rate": 0.30434782608695654,
+      "max_dd": 0.2708697372942003,
+      "final_value": 119572.22060000006,
+      "aggressive_buys": 21,
+      "defensive_buys": 0,
+      "normal_buys": 48,
+      "filter_stats": {
+        "pct_pass": 185,
+        "pct_fail": 133,
+        "liq_pass": 0,
+        "liq_fail": 0,
+        "total_signals": 318,
+        "filtered_signals": 133
+      },
+      "stop_counts": {
+        "rotate": 12,
+        "sig": 41,
+        "candle": 9,
+        "yellow": 1,
+        "final": 6
+      },
+      "label": "Explosive_SectorOff",
+      "b2_name": "Explosive_SectorOff"
     }
-  },
+  ],
   "best_config": {
-    "b2_name": "OAMV_Conservative",
-    "stop_profile": "Tight"
+    "b2_name": "OAMV_Aggressive"
   },
-  "elapsed_seconds": 7849.741804361343
+  "elapsed_seconds": 7820.534576177597
 }

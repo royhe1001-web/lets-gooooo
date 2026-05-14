@@ -256,7 +256,11 @@ def build_board_index_from_stocks(
         DataFrame with columns: close (等权平均收盘价)
         失败或无成分股返回空 DataFrame
     """
-    constituents = HARDCODED_ALL_CONSTITUENTS.get(board_code, [])
+    all_constituents = get_all_constituents()
+    constituents = all_constituents.get(board_code, [])
+    if not constituents:
+        # 回退到纯硬编码
+        constituents = _HARDCODED_MERGED.get(board_code, [])
     if not constituents:
         return pd.DataFrame()
 
@@ -317,8 +321,9 @@ def build_all_board_indices(
         {board_code: DataFrame(kline)}
     """
     board_list = get_board_list()
+    all_constituents = get_all_constituents()
     boards_with_constituents = [
-        code for code in HARDCODED_ALL_CONSTITUENTS
+        code for code in all_constituents
         if code in board_list
     ]
 
@@ -349,8 +354,8 @@ def build_all_board_indices(
     logger.info(
         "板块指数合成完成: %d 个板块 (含 %d-%d 只成分股/板块)",
         len(results),
-        min(len(HARDCODED_ALL_CONSTITUENTS.get(c, [])) for c in results) if results else 0,
-        max(len(HARDCODED_ALL_CONSTITUENTS.get(c, [])) for c in results) if results else 0,
+        min(len(all_constituents.get(c, [])) for c in results) if results else 0,
+        max(len(all_constituents.get(c, [])) for c in results) if results else 0,
     )
     return results
 
@@ -414,9 +419,326 @@ def fetch_board_kline_trends2(
 
 # ======================== 板块成分股拉取 ========================
 
-# 成分股硬编码 (top-10 行业 + 部分关键概念)
-# 格式: {board_code: [stock_codes]}
-# 由于 eastmoney clist/get 被封锁，先用硬编码+ tushare 补充
+# ── tushare 行业 → BK 板块映射 ──────────────────────────────
+# key: tushare stock_basic.industry 值, value: 对应的 BK 板块代码列表
+# 用于从 stock_basic 获取全量成分股
+TS_INDUSTRY_TO_BK: Dict[str, List[str]] = {
+    "半导体":            ["BK1036"],
+    "软件服务":          ["BK0469"],
+    "通信设备":          ["BK0471"],
+    "医疗保健":          ["BK0511"],
+    "银行":             ["BK0536"],
+    "保险":             ["BK0537"],
+    "小金属":           ["BK1027"],
+    "医药商业":         ["BK1042"],
+    "装修装饰":         ["BK0597"],
+    "化纤":             ["BK0609"],
+    "造纸":             ["BK0620"],
+    "塑料":             ["BK0614", "BK1051"],
+    "橡胶":             ["BK1052"],
+    "玻璃":             ["BK0625"],
+    "陶瓷":             ["BK0625"],
+    "家用电器":         ["BK0460"],
+    "汽车配件":         ["BK0459"],
+    "汽车整车":         ["BK0478"],
+    "元器件":           ["BK0474"],
+    "化工原料":         ["BK0454"],
+    "农药化肥":         ["BK0660"],
+    "化学制药":         ["BK0508"],
+    "生物制药":         ["BK0508", "BK1044"],
+    "中成药":           ["BK0508", "BK1040"],
+    "食品":             ["BK0466"],
+    "白酒":             ["BK0466", "BK0525"],
+    "啤酒":             ["BK0525"],
+    "红黄酒":           ["BK0525"],
+    "乳制品":           ["BK0466"],
+    "软饮料":           ["BK0466"],
+    "服饰":             ["BK0483"],
+    "纺织":             ["BK0483"],
+    "煤炭开采":         ["BK0437"],
+    "普钢":             ["BK0445"],
+    "特种钢":           ["BK0445"],
+    "钢加工":           ["BK0445", "BK0632"],
+    "铝":               ["BK0447"],
+    "铜":               ["BK0447"],
+    "铅锌":             ["BK0447"],
+    "黄金":             ["BK0447"],
+    "水泥":             ["BK0449"],
+    "其他建材":         ["BK0449"],
+    "全国地产":         ["BK0451"],
+    "区域地产":         ["BK0451"],
+    "火力发电":         ["BK0438"],
+    "水力发电":         ["BK0438"],
+    "新型电力":         ["BK0438"],
+    "环境保护":         ["BK0504", "BK0728"],
+    "专用机械":         ["BK0548", "BK0642"],
+    "工程机械":         ["BK0548"],
+    "机械基件":         ["BK0548", "BK0647"],
+    "机床制造":         ["BK0548", "BK0647"],
+    "电气设备":         ["BK0555"],
+    "电器仪表":         ["BK0560"],
+    "航空":             ["BK0493", "BK1050"],
+    "机场":             ["BK0576"],
+    "空运":             ["BK0576"],
+    "港口":             ["BK0574"],
+    "水运":             ["BK0574"],
+    "路桥":             ["BK0570"],
+    "公路":             ["BK0570"],
+    "证券":             ["BK0540"],
+    "多元金融":         ["BK0540"],
+    "百货":             ["BK0545"],
+    "商贸代理":         ["BK0545"],
+    "超市连锁":         ["BK0545"],
+    "建筑工程":         ["BK0590"],
+    "船舶":             ["BK0501"],
+    "旅游景点":         ["BK0485"],
+    "酒店餐饮":         ["BK0485"],
+    "影视音像":         ["BK0487"],
+    "出版业":           ["BK0487"],
+    "广告包装":         ["BK0487", "BK0603"],
+    "农业综合":         ["BK0517"],
+    "种植业":           ["BK0517"],
+    "渔业":             ["BK0517"],
+    "林业":             ["BK0517"],
+    "文教休闲":         ["BK0740"],
+    "供气供热":         ["BK0582"],
+    "水务":             ["BK0582"],
+    "仓储物流":         ["BK1054"],
+    "矿物制品":         ["BK0567"],
+    "染料涂料":         ["BK0567"],
+    "石油开采":         ["BK0439"],
+    "石油加工":         ["BK0439"],
+    "石油贸易":         ["BK0439"],
+    "IT设备":           [],
+    "互联网":           [],
+    "家居用品":         [],
+    "综合类":           [],
+    "日用化工":         [],
+    "纺织机械":         [],
+    "轻工机械":         [],
+    "运输设备":         [],
+    "饲料":             [],
+    "摩托车":           [],
+    "批发业":           [],
+    "园区开发":         [],
+    "公共交通":         [],
+    "铁路":             [],
+    "农用机械":         [],
+    "房产服务":         ["BK1045"],
+    "焦炭加工":         ["BK0437"],
+    "电信运营":         ["BK0736"],
+    "商品城":           ["BK0545"],
+    "电器连锁":         [],
+    "汽车服务":         [],
+    "旅游服务":         [],
+    "其他商业":         [],
+}
+
+
+def _fetch_tushare_industry_mapping(force_refresh: bool = False) -> Dict[str, List[str]]:
+    """通过 tushare stock_basic 获取全市场股票的行业归属
+
+    Returns:
+        {industry_name: [stock_codes]}  e.g. {'半导体': ['688981', '002371', ...]}
+    """
+    try:
+        import tushare as ts
+        ts.set_token("c2a96ee78a444f422063ba90ed4460a8f252f3fd136ea893f6c310ae")
+        pro = ts.pro_api()
+        df = pro.stock_basic(exchange="", list_status="L", fields="symbol,industry")
+        result = df.groupby("industry")["symbol"].apply(list).to_dict()
+        logger.info("tushare stock_basic: %d industries, %d stocks total",
+                     len(result), sum(len(v) for v in result.values()))
+        return result
+    except Exception as e:
+        logger.warning("tushare stock_basic 失败: %s，回退到硬编码数据", e)
+        return {}
+
+
+def _build_constituents_from_tushare() -> Dict[str, List[str]]:
+    """用 tushare 数据构建全量成分股映射
+
+    1. 从 stock_basic 获取所有股票的行业归属
+    2. 用 TS_INDUSTRY_TO_BK 映射到 BK 板块
+    3. 用 tushare concept_detail 补充概念板块
+
+    Returns:
+        {board_code: [stock_codes]}  覆盖约 80+ BK 板块
+    """
+    result: Dict[str, List[str]] = {}
+
+    # ── Step 1: stock_basic 行业 → BK 板块 ──
+    ts_industry = _fetch_tushare_industry_mapping()
+    if ts_industry:
+        for ts_ind, bk_codes in TS_INDUSTRY_TO_BK.items():
+            stocks = ts_industry.get(ts_ind, [])
+            if not stocks:
+                continue
+            for bk_code in bk_codes:
+                if not bk_code:
+                    continue
+                if bk_code not in result:
+                    result[bk_code] = []
+                # 去重合并
+                existing = set(result[bk_code])
+                new_stocks = [s for s in stocks if s not in existing]
+                result[bk_code].extend(new_stocks)
+
+    # ── Step 2: 保留现有硬编码数据 (与 tushare 数据合并) ──
+    merged = {}
+    merged.update(HARDCODED_CONSTITUENTS)
+    merged.update(HARDCODED_CONCEPT_CONSTITUENTS)
+
+    for bk_code, ts_stocks in result.items():
+        if bk_code in merged:
+            existing_set = set(merged[bk_code])
+            merged[bk_code].extend([s for s in ts_stocks if s not in existing_set])
+        else:
+            merged[bk_code] = ts_stocks
+
+    # ── Step 3: tushare concept_detail 补充概念板块 ──
+    _expand_concepts_with_tushare(merged)
+
+    return merged
+
+
+def _expand_concepts_with_tushare(merged: Dict[str, List[str]]):
+    """用 tushare concept_detail 补充概念板块的成分股"""
+    try:
+        import tushare as ts
+        ts.set_token("c2a96ee78a444f422063ba90ed4460a8f252f3fd136ea893f6c310ae")
+        pro = ts.pro_api()
+
+        # 只拉取与 BK 概念板块名称匹配的 tushare 概念
+        board_list = get_board_list()
+        # 收集概念 BK 板块名称
+        concept_bk_names = {
+            name: code for code, (name, btype) in board_list.items()
+            if btype == "concept"
+        }
+
+        # 获取 tushare 全部概念列表
+        ts_concepts = pro.concept()
+        logger.info("tushare concept 列表: %d 个概念", len(ts_concepts))
+
+        # 名称匹配：精确 > 包含 (>3字共享不做，太宽泛)
+        for bk_name, bk_code in concept_bk_names.items():
+            if bk_code in merged and len(merged[bk_code]) >= 10:
+                # 已经有足够的成分股，跳过
+                continue
+
+            matched_ids = []
+            for _, row in ts_concepts.iterrows():
+                ts_name = row["name"]
+                # 精确匹配
+                if bk_name == ts_name:
+                    matched_ids.append((row["code"], 3))
+                # 完全包含 (且短者在长者中有完整匹配)
+                elif (len(bk_name) >= 3 and bk_name in ts_name) or \
+                     (len(ts_name) >= 3 and ts_name in bk_name):
+                    matched_ids.append((row["code"], 2))
+
+            if not matched_ids:
+                continue
+
+            # 按匹配质量排序，取 top3 (避免拉入过多不相关股票)
+            matched_ids.sort(key=lambda x: -x[1])
+            selected = [cid for cid, _ in matched_ids[:3]]
+
+            # 拉取成分股
+            all_stocks = set()
+            for ts_id in selected:
+                try:
+                    detail = pro.concept_detail(id=ts_id)
+                    if detail is not None and not detail.empty:
+                        codes = detail["ts_code"].str.split(".").str[0].tolist()
+                        all_stocks.update(codes)
+                    time.sleep(0.3)  # 限速
+                except Exception:
+                    pass
+
+            if all_stocks:
+                if bk_code not in merged:
+                    merged[bk_code] = []
+                existing = set(merged[bk_code])
+                merged[bk_code].extend([s for s in all_stocks if s not in existing])
+                logger.info("  %s (%s): tushare concept 补充 %d 只成分股 → 总计 %d",
+                           bk_code, bk_name, len(all_stocks), len(merged[bk_code]))
+
+    except Exception as e:
+        logger.warning("tushare concept 补充失败: %s", e)
+
+
+def get_all_constituents(force_refresh: bool = False) -> Dict[str, List[str]]:
+    """获取全量板块成分股数据 (优先 tushare，回退硬编码)
+
+    首次调用使用 tushare 数据 + 硬编码合并。
+    结果缓存到对象中（非磁盘），避免重复 API 调用。
+
+    Returns:
+        {board_code: [stock_codes]}
+    """
+    # 使用模块级缓存
+    if not force_refresh and hasattr(get_all_constituents, "_cache"):
+        return get_all_constituents._cache  # type: ignore
+
+    logger.info("构建全量成分股数据 (tushare + 硬编码)...")
+    result = _build_constituents_from_tushare()
+
+    # 统计
+    total_stocks = set()
+    for stocks in result.values():
+        total_stocks.update(stocks)
+    logger.info(
+        "成分股数据: %d 个板块, %d 只唯一股票",
+        len(result), len(total_stocks),
+    )
+    # Top 5 板块
+    top5 = sorted(result.items(), key=lambda x: -len(x[1]))[:5]
+    for bk_code, stocks in top5:
+        board_list = get_board_list()
+        bk_name = board_list.get(bk_code, (bk_code, ""))[0]
+        logger.info("  %s (%s): %d 只成分股", bk_code, bk_name, len(stocks))
+
+    get_all_constituents._cache = result  # type: ignore
+    return result
+
+
+def fetch_board_constituents(symbol: str, board_type: str = "industry") -> List[str]:
+    """获取板块成分股代码列表
+
+    优先从 tushare 扩展数据查找，回退到硬编码。
+
+    Returns:
+        6位数字代码列表，失败返回空列表
+    """
+    # 获取全量成分股数据
+    all_constituents = get_all_constituents()
+
+    # 解析代码
+    board_list = get_board_list()
+    if symbol.startswith("BK") and symbol in board_list:
+        code = symbol
+    else:
+        code = None
+        for c, (n, _) in board_list.items():
+            if n == symbol:
+                code = c
+                break
+
+    if code and code in all_constituents:
+        return all_constituents[code]
+
+    if code is None:
+        logger.warning("找不到板块代码: %s", symbol)
+    else:
+        logger.debug("板块 %s (%s) 无成分股数据", symbol, code)
+    return []
+
+
+# ── 向后兼容：保留原有硬编码变量 ──────────────────────────────
+# 这些变量在 get_all_constituents() 中被使用作为基础，
+# 然后通过 tushare 数据扩展
 HARDCODED_CONSTITUENTS: Dict[str, List[str]] = {
     "BK1036": [  # 半导体
         "688981", "002371", "603986", "600703", "002049",
@@ -478,10 +800,14 @@ HARDCODED_CONCEPT_CONSTITUENTS: Dict[str, List[str]] = {
                "002896", "002085", "688981", "300750", "300124"],  # 机器人概念
 }
 
-# 合并所有硬编码成分股
-HARDCODED_ALL_CONSTITUENTS = {}
-HARDCODED_ALL_CONSTITUENTS.update(HARDCODED_CONSTITUENTS)
-HARDCODED_ALL_CONSTITUENTS.update(HARDCODED_CONCEPT_CONSTITUENTS)
+# ── 构建全量数据 (模块加载时执行) ──
+_HARDCODED_MERGED: Dict[str, List[str]] = {}
+_HARDCODED_MERGED.update(HARDCODED_CONSTITUENTS)
+_HARDCODED_MERGED.update(HARDCODED_CONCEPT_CONSTITUENTS)
+
+# HARDCODED_ALL_CONSTITUENTS 先指向合并数据
+# 后续 build_stock_board_map() 和 build_all_board_indices() 使用
+HARDCODED_ALL_CONSTITUENTS = _HARDCODED_MERGED
 
 
 def fetch_board_constituents(symbol: str, board_type: str = "industry") -> List[str]:
@@ -527,9 +853,10 @@ def build_stock_board_map(
     stock_map: Dict[str, Dict[str, List[str]]] = defaultdict(lambda: {"industry": [], "concept": []})
 
     board_list = get_board_list()
+    all_constituents = get_all_constituents()
 
-    # 从硬编码成分股构建映射
-    for board_code, stock_codes in HARDCODED_ALL_CONSTITUENTS.items():
+    # 从全量成分股构建映射 (tushare + 硬编码)
+    for board_code, stock_codes in all_constituents.items():
         if board_code not in board_list:
             continue
         name, btype = board_list[board_code]
@@ -541,7 +868,7 @@ def build_stock_board_map(
                 stock_map[stock_code][btype_key].append(name)
 
     logger.info(
-        "个股-板块映射: %d 只股票 (硬编码成分股)",
+        "个股-板块映射: %d 只股票 (tushare + 硬编码)",
         len(stock_map),
     )
     return dict(stock_map)
@@ -736,6 +1063,9 @@ def preload_sector_data(
     # 3. 从成分股合成板块指数
     board_kline_dict = {}
     if stock_data_dict is not None:
+        # 确保使用最新的成分股数据
+        if force_refresh and hasattr(get_all_constituents, "_cache"):
+            del get_all_constituents._cache
         board_kline_dict = build_all_board_indices(
             stock_data_dict, max_workers=max_workers,
         )
@@ -799,10 +1129,16 @@ if __name__ == "__main__":
 
     # 测试成分股覆盖
     print("\n--- 成分股覆盖 ---")
+    all_constituents = get_all_constituents()
     total_stocks = set()
-    for code, stocks in HARDCODED_ALL_CONSTITUENTS.items():
+    for code, stocks in all_constituents.items():
         total_stocks.update(stocks)
-    print(f"硬编码成分股: {len(total_stocks)} 只唯一股票, 覆盖 {len(HARDCODED_ALL_CONSTITUENTS)} 个板块")
+    print(f"全量成分股(tushare+硬编码): {len(total_stocks)} 只唯一股票, 覆盖 {len(all_constituents)} 个板块")
+    # Top 10 by count
+    top10 = sorted(all_constituents.items(), key=lambda x: -len(x[1]))[:10]
+    for bk_code, stocks in top10:
+        bk_name = board_list.get(bk_code, (bk_code, ""))[0]
+        print(f"  {bk_code} {bk_name}: {len(stocks)} stocks")
 
     # 测试个股-板块映射
     print("\n--- 个股-板块映射 ---")
@@ -820,7 +1156,7 @@ if __name__ == "__main__":
     import numpy as np
     dates = pd.date_range('2025-01-01', '2025-06-01', freq='B')
     mock_stock_data = {}
-    for code in HARDCODED_ALL_CONSTITUENTS.get('BK1036', [])[:5]:
+    for code in all_constituents.get('BK1036', [])[:5]:
         np.random.seed(hash(code) % 2**31)
         returns = np.random.normal(0.001, 0.02, len(dates))
         close = 50 * np.cumprod(1 + returns)

@@ -31,7 +31,7 @@ from ML_optimization.mktcap_utils import (
 )
 from quant_strategy.oamv import fetch_market_data, calc_oamv, generate_signals as gen_oamv
 from strategy_spring import generate_spring_signals
-from ML_optimization.sector_utils import preload_sector_data, get_sector_score
+
 
 FEAT_DIR = os.path.join(BASE, 'ML_optimization', 'features')
 OUT_DIR = os.path.join(BASE, 'ML_optimization')
@@ -72,14 +72,16 @@ EXPLOSIVE_B2 = {
     'weight_pullback': 1.2, 'weight_shadow_discount_thresh': 0.015,
     'weight_shadow_discount': 0.7, 'weight_strong_discount': 0.8,
     'weight_brick_resonance': 1.5,
-    'sector_momentum_enabled': True,
+    'sector_momentum_enabled': False,
     'sector_weight_strong': 1.15,
     'sector_weight_weak': 0.85,
 }
 DEFAULT_B2 = {**EXPLOSIVE_B2, 'weight_gain_2x_thresh': 0.07, 'weight_gain_2x': 2.0,
-              'gain_min': 0.04, 'j_today_max': 65}
+              'gain_min': 0.04, 'j_today_max': 65,
+              'sector_momentum_enabled': False}
 PULLBACK_B2 = {**EXPLOSIVE_B2, 'weight_gain_2x_thresh': 0.07, 'weight_gain_2x': 2.0,
-               'weight_pullback_thresh': -0.07, 'weight_pullback': 1.5}
+               'weight_pullback_thresh': -0.07, 'weight_pullback': 1.5,
+               'sector_momentum_enabled': False}
 
 DEFAULT_OAMV = {
     'oamv_aggressive_threshold': 3.0, 'oamv_defensive_threshold': -2.35,
@@ -122,16 +124,6 @@ def build_param_sets():
               'oamv_defensive_threshold': -2.0, 'oamv_defensive_buffer': 1.0,
               'oamv_defensive_ban_entry': True})
     sets.append({'name': 'OAMV_Conservative', 'b2': copy.deepcopy(EXPLOSIVE_B2), 'oamv': o})
-
-    # Sector momentum variants on Explosive B2
-    for s_strong, s_weak, s_tag in [(1.10, 0.90, 'SectorMild'),
-                                     (1.15, 0.85, 'SectorStd'),
-                                     (1.20, 0.80, 'SectorAggr')]:
-        b2 = copy.deepcopy(EXPLOSIVE_B2)
-        b2['sector_weight_strong'] = s_strong
-        b2['sector_weight_weak'] = s_weak
-        sets.append({'name': f'Explosive_{s_tag}', 'b2': b2,
-                     'oamv': copy.deepcopy(DEFAULT_OAMV)})
 
     return sets
 
@@ -368,13 +360,6 @@ def _eval_stock_chunk_bull(args):
                          np.where(chg < def_thresh, 'defensive', 'normal'))
                 dc['oamv_regime'] = regime
 
-                # Embed sector momentum score
-                if sector_lookup:
-                    stock_map = sector_lookup['stock_board_map']
-                    board_mom = sector_lookup['board_momentum']
-                    sector_scores = [get_sector_score(code, idx, stock_map, board_mom) for idx in dc.index]
-                    dc['sector_momentum_score'] = sector_scores
-
                 sdf = generate_spring_signals(dc, board_type='main', precomputed=True, params=b2p)
 
                 # Filter to signals within ANY training period
@@ -406,7 +391,7 @@ def _eval_stock_chunk_bull(args):
 
 
 def stage1_fast_screen(stock_files, oamv_df, param_sets, train_periods,
-                       sector_lookup_path=None, n_workers=0):
+                       n_workers=0):
     """Fast T+5 screening on concatenated bull periods.
     If n_workers=0, runs sequentially in main process (safer, less memory).
     If n_workers>=2, uses ProcessPoolExecutor (faster but may OOM on Windows)."""
@@ -824,25 +809,24 @@ def _run_grid_job(args_dict):
     }
 
 
-def stage2_train_grid(param_sets, stop_profiles, stock_data_paths, oamv_df_path,
-                      train_periods, sector_lookup_path=None, n_workers=4):
-    """Full backtest grid: N B2 combos x 4 stop profiles x 3 periods. Parallel."""
+def stage2_train_grid(param_sets, stock_data_paths, oamv_df_path,
+                      train_periods, n_workers=2):
+    """Full backtest grid: N B2 combos across training periods (OAMVSimEngine only)."""
     combos = []
     for ps in param_sets:
-        for sp_name, sp_config in stop_profiles.items():
-            b2, oamv = _prepare_oamv_and_b2_params(ps)
-            combos.append({
-                'b2_name': ps['name'],
-                'stop_profile': sp_name,
-                'b2_json': json.dumps(b2),
-                'oamv_json': json.dumps(oamv),
-                'stop_config_json': json.dumps(sp_config) if sp_config else None,
-            })
+        b2, oamv = _prepare_oamv_and_b2_params(ps)
+        combos.append({
+            'b2_name': ps['name'],
+            'stop_profile': 'None',
+            'b2_json': json.dumps(b2),
+            'oamv_json': json.dumps(oamv),
+            'stop_config_json': None,
+        })
 
     periods_json = json.dumps([(str(s), str(e)) for s, e in train_periods])
     stock_data_json = json.dumps(stock_data_paths)
 
-    print(f"  Grid: {len(param_sets)} B2 x {len(stop_profiles)} Stop = {len(combos)} combos")
+    print(f"  Grid: {len(param_sets)} B2 combos (OAMVSimEngine)")
     print(f"  Periods: {len(train_periods)} → {len(combos) * len(train_periods)} backtests")
     print(f"  Workers: {n_workers}", flush=True)
 
@@ -850,14 +834,12 @@ def stage2_train_grid(param_sets, stop_profiles, stock_data_paths, oamv_df_path,
     results = []
 
     if n_workers <= 1:
-        # Sequential mode
         for i, combo in enumerate(combos):
             args_dict = {
                 **combo,
                 'stock_data_json': stock_data_json,
                 'oamv_path': oamv_df_path,
                 'periods_json': periods_json,
-                'sector_lookup_path': sector_lookup_path,
             }
             try:
                 r = _run_grid_job(args_dict)
@@ -866,7 +848,7 @@ def stage2_train_grid(param_sets, stop_profiles, stock_data_paths, oamv_df_path,
                 elapsed = time.time() - t0
                 est_total = elapsed / done * len(combos) if done > 0 else 0
                 remaining = est_total - elapsed
-                print(f"  [{done}/{len(combos)}] {r['b2_name']}+{r['stop_profile']} "
+                print(f"  [{done}/{len(combos)}] {r['b2_name']} "
                       f"Sharpe={r['sharpe']:.3f} Ret={r['total_return_pct']:+.1f}% "
                       f"({elapsed:.0f}s elapsed, ~{remaining:.0f}s remaining)", flush=True)
             except Exception as e:
@@ -880,7 +862,6 @@ def stage2_train_grid(param_sets, stop_profiles, stock_data_paths, oamv_df_path,
                     'stock_data_json': stock_data_json,
                     'oamv_path': oamv_df_path,
                     'periods_json': periods_json,
-                    'sector_lookup_path': sector_lookup_path,
                 }
                 futures[executor.submit(_run_grid_job, args_dict)] = i
 
@@ -893,7 +874,7 @@ def stage2_train_grid(param_sets, stop_profiles, stock_data_paths, oamv_df_path,
                     elapsed = time.time() - t0
                     est_total = elapsed / done * len(combos) if done > 0 else 0
                     remaining = est_total - elapsed
-                    print(f"  [{done}/{len(combos)}] {r['b2_name']}+{r['stop_profile']} "
+                    print(f"  [{done}/{len(combos)}] {r['b2_name']} "
                           f"Sharpe={r['sharpe']:.3f} Ret={r['total_return_pct']:+.1f}% "
                           f"({elapsed:.0f}s elapsed, ~{remaining:.0f}s remaining)", flush=True)
                 except Exception as e:
@@ -966,8 +947,7 @@ def main():
 
     # Load sector momentum data
     print("  Loading sector momentum data...")
-    # Note: sector_lookup is loaded later in Stage 2 after stock_data is available
-    sector_lookup = None  # placeholder, loaded with stock data later
+    sector_lookup = None
 
     # Get stock files
     all_files = _get_stock_files_mainboard()
@@ -985,35 +965,20 @@ def main():
     eligible_codes.update(codes_val)
     print(f"  Eligible codes (percentile, aggressive prefilter): {len(eligible_codes)}")
 
-    # ---- Preload stock data (needed for sector index synthesis) ----
-    print("  Preloading stock data for sector indices...")
+    # ---- Preload stock data ----
+    print("  Preloading stock data...")
     stock_data = preload_stock_data(eligible_codes)
 
-    # ---- Load sector data with stock data ----
-    try:
-        sector_lookup = preload_sector_data(stock_data_dict=stock_data, start='20100101')
-        print(f"  Sector data: {len(sector_lookup.get('stock_board_map', {}))} stocks mapped, "
-              f"{len(sector_lookup.get('board_momentum', {}))} board-date scores")
-    except Exception as e:
-        print(f"  WARNING: Sector data load failed ({e}), continuing without sector factor")
-        sector_lookup = None
-
-    # Save OAMV and sector to pickle for subprocess reuse
+    # Save OAMV to pickle for subprocess reuse
     oamv_tmp = os.path.join(tempfile.gettempdir(), 'bull_grid_oamv.pkl')
     oamv_df.to_pickle(oamv_tmp)
-
-    sector_tmp = None
-    if sector_lookup:
-        sector_tmp = os.path.join(tempfile.gettempdir(), 'bull_grid_sector.pkl')
-        with open(sector_tmp, 'wb') as f:
-            pickle.dump(sector_lookup, f)
 
     # ---- Stage 1: Fast Screening ----
     print(f"\n[1/4] Stage 1: Fast T+4 Screening on Bull Periods")
     print("-" * 60)
     param_sets = build_param_sets()
     stage1_results = stage1_fast_screen(all_files, oamv_df, param_sets, TRAIN_PERIODS,
-                                        sector_lookup_path=sector_tmp, n_workers=4)
+                                        n_workers=2)
     top5 = stage1_results[:5]
 
     print(f"\n  Top-5 B2 combos:")
@@ -1021,10 +986,8 @@ def main():
         print(f"  {i+1}. {r['name']:<28s} z={r['z']:+.6f}  signals={r['n_signals']}")
 
     # ---- Stage 2: Full Backtest Grid ----
-    print(f"\n[2/4] Stage 2: Full Backtest Grid ({len(top5)} B2 x {len(STOP_PROFILES)} Stop Profiles)")
+    print(f"\n[2/4] Stage 2: Full Backtest Grid ({len(top5)} B2 combos, OAMVSimEngine)")
     print("-" * 60)
-
-    # stock_data already loaded earlier (needed for sector index synthesis)
 
     # Build stock_data_paths dict for subprocess use
     stock_data_paths = {}
@@ -1037,13 +1000,12 @@ def main():
     top5_names = {r['name'] for r in top5}
     top5_param_sets = [ps for ps in param_sets if ps['name'] in top5_names]
 
-    grid_results = stage2_train_grid(top5_param_sets, STOP_PROFILES, stock_data_paths,
-                                     oamv_tmp, TRAIN_PERIODS,
-                                     sector_lookup_path=sector_tmp, n_workers=4)
+    grid_results = stage2_train_grid(top5_param_sets, stock_data_paths,
+                                     oamv_tmp, TRAIN_PERIODS, n_workers=2)
 
-    print(f"\n  Top-5 Train (Aggregate) Results:")
+    print(f"\n  Top-5 Train (Aggregate) Results (OAMVSimEngine):")
     for i, r in enumerate(grid_results[:5]):
-        print(f"  {i+1}. {r['b2_name']}+{r['stop_profile']:<8s} "
+        print(f"  {i+1}. {r['b2_name']:<35s} "
               f"Sharpe={r['sharpe']:.3f}  Ret={r['total_return_pct']:+.1f}%  "
               f"MaxDD={r['max_dd']:.1%}  Trades={r['n_trades']}")
 
@@ -1056,61 +1018,45 @@ def main():
     for r in top3:
         ps = next(ps for ps in param_sets if ps['name'] == r['b2_name'])
         b2, oamv = _prepare_oamv_and_b2_params(ps)
-        sp = STOP_PROFILES[r['stop_profile']]
         m = run_val_or_test(stock_data, b2, oamv, oamv_df,
-                           VAL_START, VAL_END, sp,
-                           f"{r['b2_name']}+{r['stop_profile']}",
+                           VAL_START, VAL_END, None,
+                           r['b2_name'],
                            mktcap_lookup=mktcap_lookup,
                            percentiles=percentiles,
                            sector_lookup=sector_lookup)
         m['b2_name'] = r['b2_name']
-        m['stop_profile'] = r['stop_profile']
+        m['stop_profile'] = 'None'
         val_results.append(m)
-        print(f"  {r['b2_name']}+{r['stop_profile']:<8s} "
+        print(f"  {r['b2_name']:<35s} "
               f"Sharpe={m['sharpe']:.3f}  Ret={m['total_return_pct']:+.1f}%  "
               f"MaxDD={m['max_dd']:.1%}  Trades={m['n_trades']}")
 
     val_results.sort(key=lambda r: r['sharpe'], reverse=True)
     best_val = val_results[0]
-    print(f"\n  Best on Val: {best_val['b2_name']}+{best_val['stop_profile']} "
+    print(f"\n  Best on Val: {best_val['b2_name']} "
           f"(Sharpe={best_val['sharpe']:.3f})")
 
     # ---- Stage 4: Final Test ----
-    print(f"\n[4/4] Stage 4: Final Test on 2026")
+    print(f"\n[4/4] Stage 4: Final Test on 2026 (OAMVSimEngine)")
     print("-" * 60)
 
-    best_ps = next(ps for ps in param_sets if ps['name'] == best_val['b2_name'])
-    best_b2, best_oamv = _prepare_oamv_and_b2_params(best_ps)
-    best_stop = STOP_PROFILES[best_val['stop_profile']]
-
-    # Test best config
-    test_best = run_val_or_test(stock_data, best_b2, best_oamv, oamv_df,
-                                TEST_START, TEST_END, best_stop,
-                                f"{best_val['b2_name']}+{best_val['stop_profile']}",
-                                mktcap_lookup=mktcap_lookup,
-                                percentiles=percentiles,
-                                sector_lookup=sector_lookup)
-
-    # Test Explosive_def2.0 + None (baseline)
-    exp_ps = next(ps for ps in param_sets if ps['name'] == 'Explosive_def2.0')
-    exp_b2, exp_oamv = _prepare_oamv_and_b2_params(exp_ps)
-    test_orig = run_val_or_test(stock_data, exp_b2, exp_oamv, oamv_df,
-                                TEST_START, TEST_END, None, 'Explosive_def2.0+None',
-                                mktcap_lookup=mktcap_lookup,
-                                percentiles=percentiles,
-                                sector_lookup=sector_lookup)
-
-    # Test Explosive_def2.0 + Tight (old best stop)
-    test_old_best = run_val_or_test(stock_data, exp_b2, exp_oamv, oamv_df,
-                                    TEST_START, TEST_END, STOP_PROFILES['Tight'],
-                                    'Explosive_def2.0+Tight',
-                                    mktcap_lookup=mktcap_lookup,
-                                    percentiles=percentiles,
-                                    sector_lookup=sector_lookup)
+    test_results = []
+    # Test top-3 best val configs on Test 2026
+    for vr in val_results[:3]:
+        ps = next(ps for ps in param_sets if ps['name'] == vr['b2_name'])
+        b2, oamv = _prepare_oamv_and_b2_params(ps)
+        m = run_val_or_test(stock_data, b2, oamv, oamv_df,
+                            TEST_START, TEST_END, None,
+                            vr['b2_name'],
+                            mktcap_lookup=mktcap_lookup,
+                            percentiles=percentiles,
+                            sector_lookup=sector_lookup)
+        m['b2_name'] = vr['b2_name']
+        test_results.append(m)
 
     print(f"\n  {'Config':<35s} {'Return':>10s} {'Sharpe':>8s} {'WR':>8s} {'MaxDD':>8s} {'Trades':>8s}")
     print(f"  {'-'*80}")
-    for m, tag in [(test_best, 'BEST'), (test_orig, 'BASELINE'), (test_old_best, 'OLD_BEST')]:
+    for m in test_results:
         print(f"  {m['label']:<35s} {m['total_return_pct']:>+9.1f}% {m['sharpe']:>8.3f} "
               f"{m['win_rate']:>7.1%} {m['max_dd']:>7.1%} {m['n_trades']:>8d}")
 
@@ -1118,7 +1064,7 @@ def main():
     elapsed = time.time() - t0
     out = {
         'phase': '2c_bull_grid_search',
-        'date': '2026-05-12',
+        'engine': 'OAMVSimEngine',
         'date_ranges': {
             'train': [{'name': TRAIN_PERIOD_NAMES[i], 'start': str(s.date()), 'end': str(e.date())}
                       for i, (s, e) in enumerate(TRAIN_PERIODS)],
@@ -1129,14 +1075,10 @@ def main():
         'stage2_grid_top10': [{k: v for k, v in r.items() if k != 'per_period'}
                               for r in grid_results[:10]],
         'stage3_val_results': val_results,
-        'stage4_test': {
-            'best': {k: v for k, v in test_best.items() if k != 'total_return'},
-            'baseline': {k: v for k, v in test_orig.items() if k != 'total_return'},
-            'old_best': {k: v for k, v in test_old_best.items() if k != 'total_return'},
-        },
+        'stage4_test_results': [{k: v for k, v in r.items() if k != 'total_return'}
+                               for r in test_results],
         'best_config': {
             'b2_name': best_val['b2_name'],
-            'stop_profile': best_val['stop_profile'],
         },
         'elapsed_seconds': elapsed,
     }

@@ -1,68 +1,94 @@
-# Spring — 强势确认反转策略
+# Spring B2 策略
 
-A股短线反转策略（T+1 ~ T+4），基于回调确认 + 多因子加权 + OAMV市场状态感知。
+砖型反转形态 + OAMV 市场状态的 A 股短线选股策略（T+1 ~ T+4）。
 
-## 策略核心
+**最新成绩**: Test 2026-01-01 ~ 05-13 = **+64.9%**, Sharpe 1.138, MaxDD 21.4%
 
-- **入场信号**: 前日J<20（超卖）+ 当日涨幅确认 + 放量
-- **多因子加权**: 回调深度、缩量衰竭、跳空高开、上影线折价、砖型图共振
-- **市场状态**: OAMV（活筹指数）动态调整入场门槛和止损缓冲
-- **止损**: T+4时间止损 + 蜡烛止损 + 放飞滴滴止盈
-
-## 最优参数 (Explosive_def2.0)
-
-| 参数 | 值 |
-|------|-----|
-| gain_min | 4% |
-| j_today_max | 65 |
-| weight_gain_2x | 2.5x (>9%涨幅) |
-| weight_pullback | 1.2x (>5%回调) |
-| 止损方案 | None（原始引擎） |
-
-Test 2026: Return +34.7%, Sharpe 0.886, 85 trades
-
-## 快速开始
+## 环境
 
 ```bash
-# 安装依赖
-pip install pandas numpy
-
-# 数据获取（需先配置fetch_kline）
-python fetch_kline.py
-
-# 运行选股
-python run.py screen
-
-# 运行回测模拟
-python run_spring_simulation_2026.py
-
-# 生成交易报告
-python run_trade_report.py
+pip install pandas numpy requests pyarrow
 ```
 
 ## 项目结构
 
 ```
-spring_b2/
-├── strategy_spring.py          # 核心策略
-├── quant_strategy/             # 量化策略模块
-│   ├── strategy_spring.py      # 策略导出
-│   ├── indicators.py           # 技术指标计算
-│   └── oamv.py                 # OAMV活筹指数
-├── run_spring_simulation_2026.py  # T+1模拟引擎
-├── run.py                      # 主入口
-├── screen_spring.py            # 选股器 (Windows)
-├── screen_spring_m1.py         # 选股器 (Apple Silicon)
-├── ML_optimization/            # ML参数优化
-│   ├── mktcap_utils.py         # 市值分位法过滤
-│   ├── phase2c_bull_grid_search.py  # 多牛市网格搜索
-│   └── ...
-└── fetch_kline.py              # K线数据获取
+stock/
+├── run_backtest_2026.py           # 回测入口
+├── real_time_signal.py            # 实时信号（14:50 新浪行情 + 选股）
+│
+├── strategy_spring.py             # 核心选股（8条件 + 11层权重）
+├── strategy_brick.py              # 砖型图辅助
+├── screener_engine.py             # 筛选引擎
+├── screen_brick.py / screen_spring.py
+├── oamv.py                        # OAMV 活筹指数（市场状态）
+├── indicators.py                  # KDJ/MACD/白黄线/砖型图
+├── fetch_kline.py                 # K线拉取
+│
+├── quant_strategy/
+│   ├── oamv.py / indicators.py
+│
+├── ML_optimization/
+│   ├── phase2c_oamv_grid_search.py   # OAMVSimEngine (P0-P4 + P15)
+│   ├── phase2c_bull_grid_search.py   # 网格搜索 + 数据加载
+│   ├── mktcap_utils.py               # 市值分位过滤
+│   ├── sector_utils.py               # 板块动量（可选）
+│   └── features/                     # K线 parquet（4243只）
+│
+└── output/
+    ├── market_turnover.csv        # 市场成交额（OAMV 依赖）
+    ├── monthly_mktcap.csv         # 月度市值
+    └── signals/                   # 实时信号输出
 ```
 
-## 训练历史
+## 快速开始
 
-- Phase 1: 基础筛选 (2025)
-- Phase 2c: B2+OAMV联合优化，3牛市网格搜索
-- Phase 3-5: 动态阈值、LightGBM过滤
-- 2026-05: 新股票池(B+C分位法) + 4周期训练 + T+4评估 → Explosive_def2.0+None最优
+### 回测
+
+```bash
+python run_backtest_2026.py                        # 默认年初至今
+python run_backtest_2026.py --start 2025-07-01     # 指定起始
+python run_backtest_2026.py --start 2025-07-01 --end 2025-12-31
+```
+
+### 实时信号
+
+```bash
+python real_time_signal.py           # 查看
+python real_time_signal.py --execute  # 保存到 output/signals/
+```
+
+信号输出 (`output/signals/YYYYMMDD.json`)：
+```json
+{
+  "date": "2026-05-14",
+  "state": "aggressive",
+  "buys": [{"symbol": "601198", "price": 13.05, "shares": 7600, "amount": 99180}]
+}
+```
+
+### 定时任务（Windows 任务计划）
+
+```
+触发器: 周一至周五 14:50
+操作: python real_time_signal.py --execute
+起始于: <项目目录>
+```
+
+## 策略概要
+
+**入场**（8 条件 AND）：前日 J<20 + 涨幅>阈值 + J<阈值 + 放量 + 上影<阈值 + 白>黄 + 收>黄 + 收>MA20。阈值由 OAMV 状态动态调节。
+
+**权重**（11 层叠加，≤5x）：涨>9%→2.5x | 跳空→1.5x | 缩量→1.2x | 深度缩量→1.3x | 回调→1.2x | 上影折价→0.7x | 共振→1.5x
+
+**P15 仓位**：总权益基准 | 最多 4 只 | 单只 ≤ 50% | 整手取整 | min 8000 | 防御空仓
+
+**退出**：信号止损 | 蜡烛止损(OAMV动态) | 浮盈保护 | T+4 | 放飞滴滴
+
+## 移植
+
+1. 复制整个 `stock/` 文件夹
+2. `pip install pandas numpy requests pyarrow`
+3. 运行 `python run_backtest_2026.py` 验证
+
+所有路径为相对路径，无需修改配置。
