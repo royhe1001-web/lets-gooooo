@@ -15,52 +15,61 @@ OUT = BACKTEST / f'Spring_B2_回测报告_{datetime.now().strftime("%Y%m%d")}.xl
 # ── 从回测 daily_values.csv 读取净值, trade_log 读取持仓 ──
 def build_daily_from_trade_log():
     tl_path = BACKTEST / 'trade_log.csv'
-    dv_path = BACKTEST / 'daily_values.csv'
     if not tl_path.exists():
         raise FileNotFoundError('trade_log.csv 不存在，请先运行回测')
 
     tl = pd.read_csv(tl_path, parse_dates=['date'])
     tl['symbol'] = tl['symbol'].astype(str).str.zfill(6)
 
-    capital = 200_000  # 策略初始资金(显示用)
-    # 回测引擎内部用100k, daily_values.value基于100k, 需等比缩放到显示资金
-    scale = capital / 100_000
-
-    daily_values = None
-    if dv_path.exists():
-        daily_values = pd.read_csv(dv_path, parse_dates=['date'])
-        daily_values['date'] = pd.to_datetime(daily_values['date'])
-        daily_values = daily_values.set_index('date')
+    capital = 200_000  # 策略初始资金
 
     trade_dates = sorted(tl['date'].unique())
     all_dates = pd.date_range(trade_dates[0], trade_dates[-1], freq='B')
 
-    # 有daily_values则直接用(回测引擎准确值, 缩放到显示资金)
-    if daily_values is not None and not daily_values.empty:
+    # 从daily_values提取每日收盘净值(仅15:00, 无则用前日)
+    dv_path = BACKTEST / 'daily_values.csv'
+    close_values = {}  # date -> {value, cash, positions}
+    if dv_path.exists():
+        dv = pd.read_csv(dv_path, parse_dates=['date'])
+        for _, r in dv.iterrows():
+            d = r['date'].date()
+            t = r['date'].time()
+            if t == pd.Timestamp('15:00:00').time():  # 只取收盘
+                close_values[d] = {'value': float(r['value']), 'cash': float(r['cash']),
+                                   'positions': int(r['positions'])}
+        # 填充无交易日: 沿用最近收盘值
+        last_val = None
+        for d in sorted(all_dates):
+            if d.date() in close_values:
+                last_val = close_values[d.date()]
+            elif last_val is not None:
+                close_values[d.date()] = dict(last_val)
+
+    # 如果有daily_values收盘数据, 直接用
+    if close_values:
         nav_rows = []
+        prev_eq = float(capital)
+        total_equity = float(capital)
+        cash = float(capital)
+        n_pos = 0
         for d in all_dates:
-            if d in daily_values.index:
-                row = daily_values.loc[d]
-                total_equity = float(row['value']) * scale
-                prev_eq_for_ret = nav_rows[-1]['total_equity'] if nav_rows else float(capital)
-                daily_ret = (total_equity / prev_eq_for_ret - 1) if prev_eq_for_ret > 0 else 0
-                n_pos = int(row.get('positions', 0))
-                cash = float(row.get('cash', 0)) * scale
+            cv = close_values.get(d.date())
+            if cv:
+                total_equity = cv['value'] * 2  # 100k→200k缩放
+                daily_ret = (total_equity / prev_eq - 1) if prev_eq > 0 else 0
+                n_pos = cv['positions']
+                cash = cv['cash'] * 2
+                prev_eq = total_equity
             else:
-                total_equity = nav_rows[-1]['total_equity'] if nav_rows else float(capital)
                 daily_ret = 0
-                n_pos = nav_rows[-1]['n_positions'] if nav_rows else 0
-                cash = nav_rows[-1]['cash'] if nav_rows else float(capital)
             nav_rows.append({
-                'date': d, 'total_equity': total_equity,
-                'cash': cash,
+                'date': d, 'total_equity': total_equity, 'cash': cash,
                 'position_value': total_equity - cash,
-                'n_positions': n_pos,
-                'daily_ret': daily_ret,
+                'n_positions': n_pos, 'daily_ret': daily_ret,
                 'cum_ret': total_equity / capital - 1,
             })
 
-        # 从trade_log重建持仓
+        # 从trade_log重建每日持仓
         positions = {}
         pos_rows = []
         for d in all_dates:
@@ -68,24 +77,19 @@ def build_daily_from_trade_log():
                 day_trades = tl[tl['date'] == d]
                 for _, s in day_trades[day_trades['action'] == 'SELL'].iterrows():
                     sym = str(s['symbol']).zfill(6)
-                    if sym in positions:
-                        del positions[sym]
+                    if sym in positions: del positions[sym]
                 for _, b in day_trades[day_trades['action'] == 'BUY'].iterrows():
                     sym = str(b['symbol']).zfill(6)
                     positions[sym] = {'shares': int(b['shares']), 'side': str(b.get('side', ''))}
             for sym, p in positions.items():
                 pos_rows.append({'date': d, 'symbol': sym, 'shares': p['shares'], 'side': p.get('side', '')})
 
-        nav = pd.DataFrame(nav_rows)
-        nav['date'] = pd.to_datetime(nav['date'])
-        pos = pd.DataFrame(pos_rows)
-        pos['date'] = pd.to_datetime(pos['date'])
-        nav['nav'] = nav['total_equity'] / capital
-        nav['cum_ret_pct'] = nav['nav'] - 1
+        nav = pd.DataFrame(nav_rows); nav['date'] = pd.to_datetime(nav['date'])
+        pos = pd.DataFrame(pos_rows); pos['date'] = pd.to_datetime(pos['date'])
+        nav['nav'] = nav['total_equity'] / capital; nav['cum_ret_pct'] = nav['nav'] - 1
         return nav, pos, all_dates
 
-    # fallback: 从trade_log重建(无daily_values时)
-
+    # fallback: 从trade_log+parquet重建
     # 价格缓存: 按需从parquet读取持仓股日线
     _price_cache = {}
     def _get_price(sym, dt):
