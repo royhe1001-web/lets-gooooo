@@ -26,15 +26,32 @@ def build_daily_from_trade_log():
     trade_dates = sorted(tl['date'].unique())
     all_dates = pd.date_range(trade_dates[0], trade_dates[-1], freq='B')
 
-    # 从daily_values提取每日净值(每天取最后一条, 优先15:00)
+    # 从daily_values提取每日净值(每天最后一条, 过滤异常快照)
     dv_path = BACKTEST / 'daily_values.csv'
-    daily_snapshot = {}  # date -> {value, cash, positions}
+    daily_snapshot = {}
     if dv_path.exists():
         dv = pd.read_csv(dv_path, parse_dates=['date'])
         for _, r in dv.iterrows():
             d_key = r['date'].date()
             daily_snapshot[d_key] = {'value': float(r['value']), 'cash': float(r['cash']),
                                      'positions': int(r['positions'])}
+
+    # 检测异常快照: 无15:00 + 无交易 + 日涨跌>15% → 用前日值
+    trade_dates_set = set(tl['date'].dt.date)
+    fixed_dates = set()
+    sorted_dates = sorted(daily_snapshot.keys())
+    for i, d in enumerate(sorted_dates):
+        if i == 0:
+            continue
+        prev = daily_snapshot[sorted_dates[i-1]]['value']
+        cur = daily_snapshot[d]['value']
+        chg = abs(cur / prev - 1) if prev > 0 else 0
+        if chg > 0.15 and d not in trade_dates_set:
+            daily_snapshot[d] = dict(daily_snapshot[sorted_dates[i-1]])
+            fixed_dates.add(d)
+
+    if fixed_dates:
+        print(f'  过滤异常快照: {len(fixed_dates)}天 {sorted(fixed_dates)}')
 
     # 如果有daily_values数据, 直接用
     if daily_snapshot:
@@ -43,14 +60,18 @@ def build_daily_from_trade_log():
         total_equity = float(capital)
         cash = float(capital)
         n_pos = 0
+        daily_ret = 0.0
         for d in all_dates:
             cv = daily_snapshot.get(d.date())
             if cv:
-                total_equity = cv['value'] * 2  # 100k→200k缩放
+                total_equity = cv['value'] * 2
                 daily_ret = (total_equity / prev_eq - 1) if prev_eq > 0 else 0
                 n_pos = cv['positions']
                 cash = cv['cash'] * 2
                 prev_eq = total_equity
+            else:
+                daily_ret = 0.0
+                total_equity = prev_eq  # 非交易日沿用
             nav_rows.append({
                 'date': d, 'total_equity': total_equity, 'cash': cash,
                 'position_value': total_equity - cash,
