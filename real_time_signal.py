@@ -962,8 +962,12 @@ def main():
             bp = b.get('price', 0)
             yc = yesterday_close.get(b['symbol'], np.nan)
             vs_yc = (bp - yc) / yc if not np.isnan(yc) and yc > 0 else 0.0
+            # 涨停检测 (主板10%, 创业板/科创板20%)
+            sym = b['symbol']
+            is_limit_up = vs_yc >= 0.098  # ≈涨停
+            tag = ' [涨停]' if is_limit_up else ''
             print(f'  BUY  {b["symbol"]} {b.get("name","")}  '
-                  f'@{bp:.2f} (vs昨收{vs_yc:+.1%}) × {b["shares"]}股 '
+                  f'@{bp:.2f} (vs昨收{vs_yc:+.1%}{tag}) × {b["shares"]}股 '
                   f'≈ Y{b["amount"]:,.0f}  w={b["weight"]:.2f} [{b["reason"]}]')
 
     # --- 持有 ---

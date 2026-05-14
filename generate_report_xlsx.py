@@ -12,56 +12,124 @@ ROOT = Path(__file__).parent
 BACKTEST = ROOT / 'output' / 'backtest'
 OUT = BACKTEST / f'Spring_B2_回测报告_{datetime.now().strftime("%Y%m%d")}.xlsx'
 
-# ── 从 trade_log 重建每日净值 + 持仓 ──
+# ── 从回测 daily_values.csv 读取净值, trade_log 读取持仓 ──
 def build_daily_from_trade_log():
     tl_path = BACKTEST / 'trade_log.csv'
+    dv_path = BACKTEST / 'daily_values.csv'
     if not tl_path.exists():
         raise FileNotFoundError('trade_log.csv 不存在，请先运行回测')
 
     tl = pd.read_csv(tl_path, parse_dates=['date'])
     tl['symbol'] = tl['symbol'].astype(str).str.zfill(6)
 
-    capital = 200_000  # 默认初始资金
+    # 优先用回测引擎导出的daily_values
+    from ML_optimization.phase2c_oamv_grid_search import DEFAULT_CAPITAL
+    capital = DEFAULT_CAPITAL  # 100,000
+
+    daily_values = None
+    if dv_path.exists():
+        daily_values = pd.read_csv(dv_path, parse_dates=['date'])
+        daily_values['date'] = pd.to_datetime(daily_values['date'])
+        daily_values = daily_values.set_index('date')
+
     trade_dates = sorted(tl['date'].unique())
-
-    # 生成完整交易日序列 (含无操作日)
     all_dates = pd.date_range(trade_dates[0], trade_dates[-1], freq='B')
-    all_dates = [d for d in all_dates if d in set(trade_dates) or True]  # 保留所有B日
 
-    positions = {}  # sym -> {shares, cost}
+    # 有daily_values则直接用(回测引擎准确值)
+    if daily_values is not None and not daily_values.empty:
+        nav_rows = []
+        for d in all_dates:
+            if d in daily_values.index:
+                row = daily_values.loc[d]
+                total_equity = float(row['value'])
+                daily_ret = float(row.get('daily_ret', 0))
+            else:
+                total_equity = nav_rows[-1]['total_equity'] if nav_rows else float(capital)
+                daily_ret = 0
+            nav_rows.append({
+                'date': d, 'total_equity': total_equity,
+                'cash': float(row.get('cash', 0)) if d in daily_values.index else (nav_rows[-1]['cash'] if nav_rows else float(capital)),
+                'position_value': total_equity - (nav_rows[-1]['cash'] if nav_rows else float(capital)),
+                'n_positions': int(row.get('n_positions', 0)) if d in daily_values.index else (nav_rows[-1]['n_positions'] if nav_rows else 0),
+                'daily_ret': daily_ret,
+                'cum_ret': total_equity / capital - 1,
+            })
+
+        # 从trade_log重建持仓
+        positions = {}
+        pos_rows = []
+        for d in all_dates:
+            if d in set(trade_dates):
+                day_trades = tl[tl['date'] == d]
+                for _, s in day_trades[day_trades['action'] == 'SELL'].iterrows():
+                    sym = str(s['symbol']).zfill(6)
+                    if sym in positions:
+                        del positions[sym]
+                for _, b in day_trades[day_trades['action'] == 'BUY'].iterrows():
+                    sym = str(b['symbol']).zfill(6)
+                    positions[sym] = {'shares': int(b['shares']), 'side': str(b.get('side', ''))}
+            for sym, p in positions.items():
+                pos_rows.append({'date': d, 'symbol': sym, 'shares': p['shares'], 'side': p.get('side', '')})
+
+        nav = pd.DataFrame(nav_rows)
+        nav['date'] = pd.to_datetime(nav['date'])
+        pos = pd.DataFrame(pos_rows)
+        pos['date'] = pd.to_datetime(pos['date'])
+        nav['nav'] = nav['total_equity'] / capital
+        nav['cum_ret_pct'] = nav['nav'] - 1
+        return nav, pos, all_dates
+
+    # fallback: 从trade_log重建(无daily_values时)
+
+    # 价格缓存: 按需从parquet读取持仓股日线
+    _price_cache = {}
+    def _get_price(sym, dt):
+        key = (sym, dt.date())
+        if key not in _price_cache:
+            f = BACKTEST.parent / 'ML_optimization' / 'features' / f'{sym}.parquet'
+            if f.exists():
+                df = pd.read_parquet(f, columns=['date', 'close'])
+                df['date'] = pd.to_datetime(df['date'])
+                for _, r in df.iterrows():
+                    _price_cache[(sym, r['date'].date())] = float(r['close'])
+        return _price_cache.get(key, None)
+
+    positions = {}  # sym -> {shares, entry_price}
     cash = float(capital)
     nav_rows = []
     pos_rows = []
 
     prev_equity = float(capital)
-    # 按日构建: 只处理有交易的日期更新持仓, 无交易日沿用昨日净值
     trade_date_set = set(trade_dates)
 
     for d in all_dates:
+        d_date = d.date()
         if d in trade_date_set:
             day_trades = tl[tl['date'] == d]
 
-            # 先处理卖出
+            # 先卖出
             sells = day_trades[day_trades['action'] == 'SELL']
             for _, s in sells.iterrows():
                 sym = str(s['symbol']).zfill(6)
                 if sym in positions:
-                    cash += s['shares'] * s['price'] * (1 - 0.0003)
+                    px = float(s['price'])
+                    cash += int(s['shares']) * px * (1 - 0.0003)
                     del positions[sym]
 
-            # 再处理买入
+            # 再买入
             buys = day_trades[day_trades['action'] == 'BUY']
             for _, b in buys.iterrows():
                 sym = str(b['symbol']).zfill(6)
-                cost = b['shares'] * b['price'] * (1 + 0.0003)
+                px = float(b['price'])
+                cost = float(b['cost']) if pd.notna(b.get('cost')) else int(b['shares']) * px * (1 + 0.0003)
                 if cost <= cash:
                     cash -= cost
-                    positions[sym] = {'shares': int(b['shares']), 'cost': cost, 'side': b.get('side', '')}
+                    positions[sym] = {'shares': int(b['shares']), 'entry_price': px, 'side': str(b.get('side', ''))}
 
-        # 持仓市值 (用最近买入价近似, 无实时价时保持上次估算)
+        # 按当日收盘价计算持仓市值
         pos_val = 0.0
         for sym, p in positions.items():
-            px = p['cost'] / p['shares'] if p['shares'] > 0 else 0
+            px = _get_price(sym, d) or p['entry_price']
             pos_val += p['shares'] * px
 
         total_equity = cash + pos_val

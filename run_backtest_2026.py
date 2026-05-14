@@ -137,11 +137,16 @@ def main():
     if sc:
         print(f'  退出: ' + '  '.join(f'{k}={v}' for k, v in sorted(sc.items(), key=lambda x: -x[1])[:6]))
 
-    # 导出 trade_log 供实时信号桥接
+    # 导出 trade_log + daily_values 供实时信号和Excel
     import os as _os
     report_dir = _os.path.join(BASE, 'output', 'backtest')
     _os.makedirs(report_dir, exist_ok=True)
     tl = engine.export_trade_log()
+    # 导出每日净值(回测引擎计算的准确值)
+    if engine.daily_values:
+        import pandas as _pd
+        dv = _pd.DataFrame(engine.daily_values)
+        dv.to_csv(_os.path.join(report_dir, 'daily_values.csv'), index=False)
     tl.to_csv(_os.path.join(report_dir, 'trade_log.csv'), index=False)
     print(f'  trade_log: {report_dir}/trade_log.csv ({len(tl)} 条)')
 
