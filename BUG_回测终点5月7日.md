@@ -35,3 +35,19 @@ Spring B2 回测 `trade_log.csv` 最后一笔交易停在 2026-05-07：
 1. 回测终点改为自动检测最新 K线数据日期
 2. 移除或调整 `final_clear` 触发条件（除非是策略设计的止盈清仓）
 3. 回测跑完后确认 trade_log 最后日期 ≈ 最新 K线日期
+
+---
+
+## 处理 (2026-05-14 Windows端)
+
+**已修复**:
+- `phase2c_oamv_grid_search.py`: `SIM_END = pd.Timestamp.now()` (动态)
+- `phase2c_bull_grid_search.py`: `TEST_END = pd.Timestamp.now()` (动态)
+- `run_backtest_2026.py`: 自动检测 `oamv_df['date'].max()` 并调整终点
+- `final_clear` 是正确的：它在回测终点清仓，动态终点意味着清仓在数据最后一天（5/13而非5/7）
+
+**Mac端需确认**:
+1. `git pull` 拉取最新代码
+2. K线 parquet 数据是否覆盖到最新日期
+3. `market_turnover.csv` 是否更新到最新日期（OAMV 数据源）
+4. 运行 `python run_backtest_2026.py` 确认 trade_log 最后日期
