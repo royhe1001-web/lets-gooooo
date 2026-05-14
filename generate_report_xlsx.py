@@ -22,9 +22,9 @@ def build_daily_from_trade_log():
     tl = pd.read_csv(tl_path, parse_dates=['date'])
     tl['symbol'] = tl['symbol'].astype(str).str.zfill(6)
 
-    # 优先用回测引擎导出的daily_values
-    from ML_optimization.phase2c_oamv_grid_search import DEFAULT_CAPITAL
-    capital = DEFAULT_CAPITAL  # 100,000
+    capital = 200_000  # 策略初始资金(显示用)
+    # 回测引擎内部用100k, daily_values.value基于100k, 需等比缩放到显示资金
+    scale = capital / 100_000
 
     daily_values = None
     if dv_path.exists():
@@ -35,22 +35,27 @@ def build_daily_from_trade_log():
     trade_dates = sorted(tl['date'].unique())
     all_dates = pd.date_range(trade_dates[0], trade_dates[-1], freq='B')
 
-    # 有daily_values则直接用(回测引擎准确值)
+    # 有daily_values则直接用(回测引擎准确值, 缩放到显示资金)
     if daily_values is not None and not daily_values.empty:
         nav_rows = []
         for d in all_dates:
             if d in daily_values.index:
                 row = daily_values.loc[d]
-                total_equity = float(row['value'])
-                daily_ret = float(row.get('daily_ret', 0))
+                total_equity = float(row['value']) * scale
+                prev_eq_for_ret = nav_rows[-1]['total_equity'] if nav_rows else float(capital)
+                daily_ret = (total_equity / prev_eq_for_ret - 1) if prev_eq_for_ret > 0 else 0
+                n_pos = int(row.get('positions', 0))
+                cash = float(row.get('cash', 0)) * scale
             else:
                 total_equity = nav_rows[-1]['total_equity'] if nav_rows else float(capital)
                 daily_ret = 0
+                n_pos = nav_rows[-1]['n_positions'] if nav_rows else 0
+                cash = nav_rows[-1]['cash'] if nav_rows else float(capital)
             nav_rows.append({
                 'date': d, 'total_equity': total_equity,
-                'cash': float(row.get('cash', 0)) if d in daily_values.index else (nav_rows[-1]['cash'] if nav_rows else float(capital)),
-                'position_value': total_equity - (nav_rows[-1]['cash'] if nav_rows else float(capital)),
-                'n_positions': int(row.get('n_positions', 0)) if d in daily_values.index else (nav_rows[-1]['n_positions'] if nav_rows else 0),
+                'cash': cash,
+                'position_value': total_equity - cash,
+                'n_positions': n_pos,
                 'daily_ret': daily_ret,
                 'cum_ret': total_equity / capital - 1,
             })
