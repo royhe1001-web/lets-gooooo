@@ -347,6 +347,100 @@ def generate_spring_signals(df: pd.DataFrame,
     return df
 
 
+def generate_spring_entry_only(df: pd.DataFrame,
+                                board_type: str = 'main',
+                                params: dict = None) -> pd.DataFrame:
+    """轻量版: 仅计算入场信号+权重, 跳过状态机 (实时信号专用, ~3x faster)."""
+    from quant_strategy.indicators import calc_all_indicators
+    df = calc_all_indicators(df, board_type=board_type)
+
+    p = params or {}
+
+    gain = df['close'] / df['close'].shift(1) - 1
+
+    c1 = df['J'].shift(1) < p.get('j_prev_max', 20)
+    c4 = df['volume'] > df['volume'].shift(1)
+    c6 = df['white_line'] > df['yellow_line']
+    c7 = df['close'] > df['yellow_line']
+
+    ret_20d = df['close'] / df['close'].shift(20) - 1
+    is_prior_strong = ret_20d > p.get('prior_strong_ret', 0.20)
+
+    if p.get('trend_filter', True):
+        ma20 = df['close'].rolling(20).mean()
+        c8 = df['close'] > ma20
+    else:
+        c8 = pd.Series(True, index=df.index)
+
+    has_oamv = 'oamv_regime' in df.columns
+    use_dynamic = p.get('dynamic_thresholds', True) if has_oamv else False
+
+    if use_dynamic:
+        regime_arr = df['oamv_regime'].values
+        gain_agg = p.get('gain_min_aggressive', 0.04)
+        gain_def = p.get('gain_min_defensive', 0.06)
+        gain_norm = p.get('gain_min_normal', 0.06)
+        gain_min_arr = np.where(regime_arr == 'aggressive', gain_agg,
+                       np.where(regime_arr == 'defensive', gain_def, gain_norm))
+        j_agg = p.get('j_today_max_aggressive', 65)
+        j_def = p.get('j_today_max_defensive', 55)
+        j_norm = p.get('j_today_max_normal', 55)
+        j_max_arr = np.where(regime_arr == 'aggressive', j_agg,
+                    np.where(regime_arr == 'defensive', j_def, j_norm))
+        sh_agg = p.get('shadow_max_aggressive', 0.040)
+        sh_def = p.get('shadow_max_defensive', 0.025)
+        sh_norm = p.get('shadow_max_normal', 0.030)
+        shad_arr = np.where(regime_arr == 'aggressive', sh_agg,
+                   np.where(regime_arr == 'defensive', sh_def, sh_norm))
+        effective_gain_min = pd.Series(gain_min_arr, index=df.index)
+        effective_j_max = pd.Series(j_max_arr, index=df.index)
+        effective_shad_max = pd.Series(shad_arr, index=df.index)
+    else:
+        effective_gain_min = p.get('gain_min', 0.04)
+        effective_j_max = p.get('j_today_max', 65)
+        effective_shad_max = p.get('shadow_max', 0.035)
+
+    c2 = gain > effective_gain_min
+    c3_std = df['J'] < effective_j_max
+    c5_std = (df['high'] - df['close']) / df['close'] < effective_shad_max
+    c3_loose = df['J'] < p.get('j_today_loose', 70)
+    c5_loose = (df['high'] - df['close']) / df['close'] < p.get('shadow_loose', 0.045)
+
+    entry_std = c1 & c2 & c3_std & c4 & c5_std & c6 & c7 & c8
+    entry_loose = c1 & c2 & c3_loose & c4 & c5_loose & c6 & c7 & is_prior_strong & c8
+    entry = entry_std | entry_loose
+    df['b2_entry_signal'] = entry.astype(int)
+
+    # 权重 (与完整版相同)
+    df['b2_position_weight'] = 1.0
+    gain_2x_thresh = p.get('weight_gain_2x_thresh', 0.09)
+    df.loc[gain > gain_2x_thresh, 'b2_position_weight'] = p.get('weight_gain_2x', 2.5)
+    gap_thresh = p.get('weight_gap_thresh', 0.02)
+    gap_up = df['open'] > df['close'].shift(1) * (1 + gap_thresh)
+    df.loc[gap_up, 'b2_position_weight'] *= p.get('weight_gap_up', 1.5)
+    setup_shrink = df['volume'].shift(1) < df['volume'].shift(2)
+    df.loc[setup_shrink, 'b2_position_weight'] *= p.get('weight_shrink', 1.2)
+    vol_20_avg = df['volume'].shift(1).rolling(20).mean()
+    deep_shrink = df['volume'].shift(1) < vol_20_avg * p.get('weight_deep_shrink_ratio', 0.80)
+    df.loc[deep_shrink, 'b2_position_weight'] *= p.get('weight_deep_shrink', 1.3)
+    hh10 = df['close'].rolling(10).max().shift(1)
+    pullback = (df['close'].shift(1) / hh10 - 1)
+    df.loc[pullback < p.get('weight_pullback_thresh', -0.05), 'b2_position_weight'] *= p.get('weight_pullback', 1.2)
+    shadow_discount_thresh = p.get('weight_shadow_discount_thresh', 0.015)
+    has_shadow = (df['high'] - df['close']) / df['close'] >= shadow_discount_thresh
+    df.loc[has_shadow & entry, 'b2_position_weight'] *= p.get('weight_shadow_discount', 0.7)
+    df.loc[entry_loose & ~entry_std, 'b2_position_weight'] *= p.get('weight_strong_discount', 0.8)
+    if 'brick_green_to_red' in df.columns:
+        brick_resonance = (df['brick_green_to_red'] == 1) & entry
+        df.loc[brick_resonance, 'b2_position_weight'] *= p.get('weight_brick_resonance', 1.5)
+    weight_cap = p.get('weight_cap', 5.0)
+    df['b2_position_weight'] = df['b2_position_weight'].clip(upper=weight_cap)
+
+    # 跳过状态机 — 实时版由 RealtimeDecisionEngine 管理 exit
+    df['b2_state'] = 'wait'
+    return df
+
+
 def spring_strategy_summary(df: pd.DataFrame) -> Dict:
     return {
         'strategy': 'Spring强势确认反转',

@@ -488,16 +488,54 @@ class RealtimeDecisionEngine:
         return None
 
     def _generate_today_signals(self):
-        from ML_optimization.phase2c_oamv_grid_search import OAMVSimEngine
-        import ML_optimization.phase2c_oamv_grid_search as p2c_mod
-        p2c_mod.SIM_START = self.today - pd.Timedelta(days=10)
-        p2c_mod.SIM_END = self.today
-        engine = OAMVSimEngine(self.stock_data, self.b2_params,
-                               self.oamv_df.reset_index(), self.oamv_params,
-                               mktcap_lookup=self.mktcap_lookup,
-                               percentiles=self.percentiles)
-        all_signals = engine.extract_signals(lookback=120)
-        return [s for s in all_signals if s['signal_date'].normalize() == self.today]
+        """增量计算今日入场候选（轻量版screener, 跳过完整引擎和状态机）"""
+        from strategy_spring import generate_spring_entry_only
+        from ML_optimization.mktcap_utils import is_in_pct_range
+
+        agg_buf = self.oamv_params.get('oamv_aggressive_buffer', 0.95)
+        def_buf = self.oamv_params.get('oamv_defensive_buffer', 0.99)
+        ban_entry = self.oamv_params.get('oamv_defensive_ban_entry', True)
+        regime = self._get_oamv_regime(self.today)
+        if ban_entry and regime == 'defensive':
+            return []
+
+        all_signals = []
+        for code, df in self.stock_data.items():
+            try:
+                if self.today not in df.index:
+                    continue
+                sdf = df.iloc[-120:].copy()
+                regimes = [self._get_oamv_regime(idx) for idx in sdf.index]
+                sdf['oamv_regime'] = regimes
+                b2p = copy.deepcopy(self.b2_params)
+                b2p['oamv_aggressive_buffer'] = agg_buf
+                b2p['oamv_defensive_buffer'] = def_buf
+                b2p['oamv_normal_buffer'] = self.oamv_params.get('oamv_normal_buffer', 0.97)
+                b2p['oamv_grace_days'] = self.oamv_params.get('oamv_grace_days', 2)
+                b2p['oamv_defensive_ban_entry'] = ban_entry
+
+                sdf = generate_spring_entry_only(sdf, board_type='main', params=b2p)
+                row = sdf.loc[self.today]
+                if row.get('b2_entry_signal') != 1:
+                    continue
+
+                if self.mktcap_lookup and self.percentiles:
+                    if not is_in_pct_range(code, self.today, self.mktcap_lookup,
+                                           self.percentiles, regime=regime):
+                        continue
+
+                weight = float(row.get('b2_position_weight', 1.0))
+                all_signals.append({
+                    'code': code, 'signal_date': self.today,
+                    'signal_close': float(row['close']),
+                    'weight': weight,
+                    't1_date': self.today,
+                    't1_open': float(row['close']),
+                    'regime': regime,
+                })
+            except Exception:
+                continue
+        return all_signals
 
     # ── 止损检查 ──
 
@@ -885,7 +923,7 @@ def main():
             vs_yc = (bp - yc) / yc if not np.isnan(yc) and yc > 0 else 0.0
             print(f'  BUY  {b["symbol"]} {b.get("name","")}  '
                   f'@{bp:.2f} (vs昨收{vs_yc:+.1%}) × {b["shares"]}股 '
-                  f'≈ ¥{b["amount"]:,.0f}  w={b["weight"]:.2f} [{b["reason"]}]')
+                  f'≈ Y{b["amount"]:,.0f}  w={b["weight"]:.2f} [{b["reason"]}]')
 
     # --- 持有 ---
     if decision['holds']:
@@ -908,8 +946,8 @@ def main():
     total_eq = cash_est + pos_val if cash_est > 0 else pos_val
     daily_pnl = total_eq - yesterday_equity if yesterday_equity > 0 else 0
     if yesterday_equity > 0:
-        print(f'\n  现金: ¥{cash_est:,.0f} | 持仓市值: ¥{pos_val:,.0f} | 总权益: ¥{total_eq:,.0f}')
-        print(f'  今日总盈亏: ¥{daily_pnl:+,.0f} ({daily_pnl/yesterday_equity:+.2%})')
+        print(f'\n  现金: Y{cash_est:,.0f} | 持仓市值: Y{pos_val:,.0f} | 总权益: Y{total_eq:,.0f}')
+        print(f'  今日总盈亏: Y{daily_pnl:+,.0f} ({daily_pnl/yesterday_equity:+.2%})')
 
     # --- 今日累计操作 ---
     history = _load_daily_history(today_str)
@@ -931,7 +969,7 @@ def main():
             print(f'  卖出 {s["symbol"]} @{s.get("price","?"):.2f} | {s.get("reasons","")}')
         for b in history.get('buys', []):
             print(f'  买入 {b["symbol"]} [{b.get("side","?")}] '
-                  f'@{b.get("price","?"):.2f} ¥{b.get("amount",0):,.0f}')
+                  f'@{b.get("price","?"):.2f} Y{b.get("amount",0):,.0f}')
 
     # P15: 执行价格警告
     if decision['buys']:
