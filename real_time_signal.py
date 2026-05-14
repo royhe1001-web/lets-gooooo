@@ -313,6 +313,10 @@ def load_backtest_positions():
     tl = pd.read_csv(TRADE_LOG_PATH, parse_dates=['date'])
     held = {}
     for _, row in tl.iterrows():
+        # 排除final_clear: 回测期末清仓不代表真实持仓应清零
+        reason = str(row.get('reason', ''))
+        if 'final_clear' in reason:
+            continue
         code = str(row['symbol']).zfill(6)
         if row['action'] == 'BUY':
             if code not in held:
