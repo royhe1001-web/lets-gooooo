@@ -116,9 +116,43 @@ def main():
     if min_date is None: min_date = pd.Timestamp('2026-05-07')
     print(f'数据到: {min_date.date()} | 共 {len(files)} 文件')
 
+    import sys as _sys
+    force_recalc = '--recalc' in _sys.argv
+
     today = pd.Timestamp.now()
-    if min_date.date() >= today.date():
-        print('数据已最新'); return
+    if min_date.date() >= today.date() and not force_recalc:
+        print('数据已最新 (--recalc 强制重算指标)'); return
+
+    # Recalc-only: 只重算NaN指标, 不下载OHLCV
+    if force_recalc:
+        print('--recalc: 仅重算NaN指标...')
+        from indicators import calc_all_indicators
+        recalc_total = 0
+        for i, f in enumerate(files):
+            try:
+                df = pd.read_parquet(f)
+                df['date'] = pd.to_datetime(df['date'])
+                if 'J' not in df.columns or df['J'].notna().all():
+                    continue
+                need = df[df['J'].isna() & df['close'].notna()]
+                if len(need) == 0:
+                    continue
+                # Take enough history for rolling windows
+                first_nan = need.index[0]
+                start_idx = max(0, first_nan - 240)
+                sub = df.iloc[start_idx:].copy()
+                result = calc_all_indicators(sub, board_type='main')
+                for col in result.columns:
+                    if col in df.columns:
+                        df.loc[result.index, col] = result[col]
+                df.to_parquet(f, index=False)
+                recalc_total += 1
+                if recalc_total % 100 == 0:
+                    print(f'  重算进度: {recalc_total}')
+            except Exception:
+                pass
+        print(f'  重算完成: {recalc_total} 文件')
+        return
 
     start_d = min_date + pd.Timedelta(days=1)
     end_d = today
