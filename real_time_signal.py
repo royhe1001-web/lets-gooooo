@@ -978,8 +978,13 @@ def main():
             cp = h.get('price', 0)
             yc = yesterday_close.get(sym, np.nan)
             today_pnl = (cp - yc) / yc if not np.isnan(yc) and yc > 0 else 0.0
+            days = h.get('days_held', 0)
+            if days == 0:
+                pnl_str = f'日内{today_pnl:+.2%}'  # 当天入场, 非持仓收益
+            else:
+                pnl_str = f'今日{today_pnl:+.2%}'
             print(f'  HOLD {sym}  @{cp:.2f}  '
-                  f'ret={h["return"]:+.1%} | 今日{today_pnl:+.2%}  days={h["days_held"]}')
+                  f'ret={h["return"]:+.1%} | {pnl_str}  days={days}')
 
     if not decision['sells'] and not decision['buys']:
         tag = '非调仓日无操作' if not is_rebalance else '无符合条件的操作'
