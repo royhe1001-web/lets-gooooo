@@ -10,7 +10,7 @@ Training: 3 Chinese A-share bull markets (each includes trend-testing pullbacks)
   - Bull 2: 2020-03-23 ~ 2021-12-13 (结构牛, incl. Feb-Mar 2021 抱团瓦解)
   - Bull 3: 2024-01-01 ~ 2025-06-30 (政策牛, incl. Jun-Aug 2024 阴跌, Oct 急刹)
 Validation: 2025-07-01 ~ 2025-12-31
-Test:       2026-01-01 ~ 2026-05-07
+Test:       2026-01-01 ~ latest (dynamic)
 """
 
 import os, sys, time, json, copy, pickle
