@@ -26,42 +26,31 @@ def build_daily_from_trade_log():
     trade_dates = sorted(tl['date'].unique())
     all_dates = pd.date_range(trade_dates[0], trade_dates[-1], freq='B')
 
-    # 从daily_values提取每日收盘净值(仅15:00, 无则用前日)
+    # 从daily_values提取每日净值(每天取最后一条, 优先15:00)
     dv_path = BACKTEST / 'daily_values.csv'
-    close_values = {}  # date -> {value, cash, positions}
+    daily_snapshot = {}  # date -> {value, cash, positions}
     if dv_path.exists():
         dv = pd.read_csv(dv_path, parse_dates=['date'])
         for _, r in dv.iterrows():
-            d = r['date'].date()
-            t = r['date'].time()
-            if t == pd.Timestamp('15:00:00').time():  # 只取收盘
-                close_values[d] = {'value': float(r['value']), 'cash': float(r['cash']),
-                                   'positions': int(r['positions'])}
-        # 填充无交易日: 沿用最近收盘值
-        last_val = None
-        for d in sorted(all_dates):
-            if d.date() in close_values:
-                last_val = close_values[d.date()]
-            elif last_val is not None:
-                close_values[d.date()] = dict(last_val)
+            d_key = r['date'].date()
+            daily_snapshot[d_key] = {'value': float(r['value']), 'cash': float(r['cash']),
+                                     'positions': int(r['positions'])}
 
-    # 如果有daily_values收盘数据, 直接用
-    if close_values:
+    # 如果有daily_values数据, 直接用
+    if daily_snapshot:
         nav_rows = []
         prev_eq = float(capital)
         total_equity = float(capital)
         cash = float(capital)
         n_pos = 0
         for d in all_dates:
-            cv = close_values.get(d.date())
+            cv = daily_snapshot.get(d.date())
             if cv:
                 total_equity = cv['value'] * 2  # 100k→200k缩放
                 daily_ret = (total_equity / prev_eq - 1) if prev_eq > 0 else 0
                 n_pos = cv['positions']
                 cash = cv['cash'] * 2
                 prev_eq = total_equity
-            else:
-                daily_ret = 0
             nav_rows.append({
                 'date': d, 'total_equity': total_equity, 'cash': cash,
                 'position_value': total_equity - cash,
