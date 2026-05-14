@@ -47,6 +47,10 @@ BEST_B2 = {
 
 BEST_OAMV = {
     'oamv_aggressive_threshold': 3.0, 'oamv_defensive_threshold': -2.0,
+    'trailing_activate': 0.15, 'trailing_pct': 0.08,
+    'take_profit_partial': 0.30, 'take_profit_partial_frac': 0.50,
+    'take_profit_full': 0.60, 'peak_dd_stop': -0.12,
+    'max_positions': 4, 'single_position_cap': 0.50,
 }
 
 P15_MAX_POSITIONS = 4
@@ -579,31 +583,49 @@ class RealtimeDecisionEngine:
             days_held = (today_idx - buy_idx) if buy_idx is not None and today_idx is not None else 0
             if self.today == pos['buy_date']:
                 continue
-
+            cum_return = (close_today / pos['buy_price'] - 1)
+            if 'peak_price' not in pos or close_today > pos.get('peak_price', 0):
+                pos['peak_price'] = close_today
+            tp_partial = self.oamv_params.get('take_profit_partial', 0.30)
+            tp_partial_frac = self.oamv_params.get('take_profit_partial_frac', 0.50)
+            tp_full = self.oamv_params.get('take_profit_full', 0.60)
+            trail_activate = self.oamv_params.get('trailing_activate', 0.15)
+            trail_pct = self.oamv_params.get('trailing_pct', 0.08)
+            peak_dd_limit = self.oamv_params.get('peak_dd_stop', -0.12)
+            if cum_return >= tp_full:
+                to_sell.append((code, 'take_full', 1.0)); continue
+            if cum_return >= tp_partial and not pos.get('half_sold', False):
+                to_sell.append((code, 'take_half', tp_partial_frac)); continue
+            peak_px = pos.get('peak_price', pos['buy_price'])
+            if peak_px > 0 and (close_today / peak_px - 1) <= peak_dd_limit:
+                to_sell.append((code, 'peak_dd', 1.0)); continue
+            if (cum_return >= trail_activate and pos.get('peak_price', 0) > pos['buy_price']
+                    and close_today < pos['peak_price'] * (1 - trail_pct)):
+                to_sell.append((code, 'trail', 1.0)); continue
             # 蜡烛止损
             buf = {'aggressive': agg_buf, 'defensive': def_buf}.get(regime, norm_buf)
             if close_today < pos['entry_low'] * buf and days_held >= grace_days:
-                to_sell.append((code, f'candle_{regime}'))
+                to_sell.append((code, f'candle_{regime}', 1.0))
                 continue
             # 信号止损
             if close_today < pos['signal_close']:
-                to_sell.append((code, 'sig'))
+                to_sell.append((code, 'sig', 1.0))
                 continue
             # 黄线止损
             if self.today in df.index:
                 yellow = float(df.loc[self.today].get('yellow_line', 0))
                 if yellow > 0 and close_today < yellow:
-                    to_sell.append((code, 'yellow'))
+                    to_sell.append((code, 'yellow', 1.0))
                     continue
             # 滴滴止损
             if pos.get('has_flown'):
                 prev = self._get_price(code, self.today - pd.Timedelta(days=1), 'close')
                 if prev and close_today < prev:
-                    to_sell.append((code, 'didi'))
+                    to_sell.append((code, 'didi', 1.0))
                     continue
             # T+5 时间止损
             if days_held >= 5 and (close_today / pos['buy_price'] - 1) < 0.05:
-                to_sell.append((code, 't5'))
+                to_sell.append((code, 't5', 1.0))
                 continue
 
         return to_sell
@@ -696,6 +718,8 @@ class RealtimeDecisionEngine:
                 'signal_close': pos.get('signal_close', 0),
                 'cost': pos.get('cost', 0),
                 'has_flown': pos.get('has_flown', False),
+                'peak_price': pos.get('peak_price', pos.get('buy_price', 0)),
+                'half_sold': pos.get('half_sold', False),
             }
 
         # 初始现金: 从回测读取, 异常则估算
@@ -749,7 +773,7 @@ class RealtimeDecisionEngine:
             transition_sells = self._state_transition_sells(prev_regime, regime)
             for code, reason in transition_sells:
                 if code not in [s[0] for s in sell_list]:
-                    sell_list.append((code, reason))
+                    sell_list.append((code, reason, 1.0))
 
         # 3. 生成买入候选
         raw_signals = self._generate_today_signals()
@@ -819,11 +843,12 @@ class RealtimeDecisionEngine:
         commission = 0.0003
         cash = init_cash
         # 卖出回款
-        for code, reason in sell_list:
+        for item in sell_list:
+            code = item[0]; reason = item[1]; partial_frac = item[2] if len(item) > 2 else 1.0
             px = self._get_price(code, self.today)
             if px and code in positions_dict:
                 sh = positions_dict[code].get('shares', 0)
-                cash += sh * px * (1 - commission)
+                cash += sh * partial_frac * px * (1 - commission)
         # 买入扣款
         for b in buy_list:
             cash -= b['amount']
@@ -1030,20 +1055,28 @@ def main():
     if args.execute:
         os.makedirs(SIGNAL_DIR, exist_ok=True)
 
-        # 更新持仓状态（卖出后移除, 买入后添加）
+        # 更新持仓（部分卖:减仓; 全卖:移除; 买入:添加）
         updated_positions = {}
         for code, pos in positions.items():
-            if code not in [s[0] for s in decision['sells']]:
+            sell_match = next((s for s in decision['sells'] if s[0] == code), None)
+            if sell_match is None:
                 updated_positions[code] = pos
+            else:
+                pf = sell_match[2] if len(sell_match) > 2 else 1.0
+                if pf < 1.0:
+                    pc = dict(pos)
+                    sold = int(pos['shares'] * pf)
+                    pc['shares'] = pos['shares'] - sold
+                    pc['cost'] = pos.get('cost', 0) * (1 - pf)
+                    pc['half_sold'] = True
+                    if pc['shares'] >= 100:
+                        updated_positions[code] = pc
         for b in decision['buys']:
             updated_positions[b['symbol']] = {
-                'buy_date': today_str,
-                'buy_price': b['price'],
-                'shares': b['shares'],
-                'signal_weight': b['weight'],
-                'entry_low': b['price'],    # 实时版用买入价近似
-                'signal_close': b['price'],  # 实时版用买入价近似
-                'cost': b['amount'],
+                'buy_date': today_str, 'buy_price': b['price'],
+                'shares': b['shares'], 'signal_weight': b['weight'],
+                'entry_low': b['price'], 'signal_close': b['price'],
+                'cost': b['amount'], 'peak_price': b['price'], 'half_sold': False,
             }
         save_state_files(updated_positions, regime, today_str, is_rebalance, True)
 

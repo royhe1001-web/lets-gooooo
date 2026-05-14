@@ -69,7 +69,7 @@ class OAMVSimEngine:
         self.oamv_params = oamv_params
         self.cash = DEFAULT_CAPITAL
         self.initial_capital = DEFAULT_CAPITAL
-        self.max_positions = 4
+        self.max_positions = oamv_params.get('max_positions', 4)
         self.min_positions = 0   # allow empty in defensive
         self._last_check_date = None
         self.max_entries_per_day = oamv_params.get('max_entries_per_day', 3)
@@ -235,7 +235,8 @@ class OAMVSimEngine:
         base = capital / slots_open
         wf = min(signal_weight / 2.0, 2.5)
         # 单票上限50%基于当前总权益, 利润越大仓位越大
-        alloc = min(base * wf, capital * 0.50)
+        single_cap = self.oamv_params.get('single_position_cap', 0.50)
+        alloc = min(base * wf, capital * single_cap)
         # 实际不超可用现金
         alloc = min(alloc, self.cash * 0.98)
 
@@ -345,6 +346,24 @@ class OAMVSimEngine:
                 to_sell.append((code, date, close_today,
                                f'1yr_clear(T+{days_held})', 1.0))
                 continue
+
+            if close_today > pos.peak_price:
+                pos.peak_price = close_today
+            trail_activate = self.oamv_params.get('trailing_activate', 0.15)
+            trail_pct = self.oamv_params.get('trailing_pct', 0.08)
+            tp_partial = self.oamv_params.get('take_profit_partial', 0.30)
+            tp_partial_frac = self.oamv_params.get('take_profit_partial_frac', 0.50)
+            tp_full = self.oamv_params.get('take_profit_full', 0.60)
+            peak_dd_limit = self.oamv_params.get('peak_dd_stop', -0.12)
+            if not is_buy_day and cum_return >= tp_full:
+                to_sell.append((code, date, close_today, 'take_full', 1.0)); continue
+            if not is_buy_day and cum_return >= tp_partial and not pos.half_sold:
+                to_sell.append((code, date, close_today, 'take_half', tp_partial_frac)); continue
+            if not is_buy_day and pos.peak_price > 0 and (close_today / pos.peak_price - 1) <= peak_dd_limit:
+                to_sell.append((code, date, close_today, 'peak_dd', 1.0)); continue
+            if (not is_buy_day and cum_return >= trail_activate and pos.peak_price > pos.buy_price
+                    and close_today < pos.peak_price * (1 - trail_pct)):
+                to_sell.append((code, date, close_today, 'trail', 1.0)); continue
 
             # 0AMV-aware candle stop
             if regime == 'aggressive':
@@ -686,6 +705,10 @@ def build_param_sets():
         'oamv_normal_buffer': 0.97,
         'oamv_grace_days': 2,
         'oamv_defensive_ban_entry': True,
+        'trailing_activate': 0.15, 'trailing_pct': 0.08,
+        'take_profit_partial': 0.30, 'take_profit_partial_frac': 0.50,
+        'take_profit_full': 0.60, 'peak_dd_stop': -0.12,
+        'single_position_cap': 0.50, 'max_positions': 4,
     }
 
     # 0: DEFAULT B2 + DEFAULT OAMV
