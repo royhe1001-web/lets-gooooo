@@ -35,8 +35,8 @@ OUT_DIR = os.path.join(BASE, 'ML_optimization')
 COMMISSION_BUY = 0.0003
 COMMISSION_SELL = 0.0013
 DEFAULT_CAPITAL = 100_000
-SIM_START = pd.Timestamp('2026-01-01')
-SIM_END = pd.Timestamp('2026-05-07')
+SIM_START = pd.Timestamp.now().normalize() - pd.Timedelta(days=365)
+SIM_END = pd.Timestamp.now().normalize()
 
 SUPER_WEIGHT_THRESHOLD = 3.0
 

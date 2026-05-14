@@ -49,7 +49,7 @@ TRAIN_PERIOD_NAMES = ['Bull1_2014-2015', 'Range_2016-2017', 'Bull2_2020-2021', '
 VAL_START = pd.Timestamp('2025-07-01')
 VAL_END   = pd.Timestamp('2025-12-31')
 TEST_START = pd.Timestamp('2026-01-01')
-TEST_END   = pd.Timestamp('2026-05-07')
+TEST_END   = pd.Timestamp.now().normalize()  # 默认最新, 网格搜索按需覆盖
 
 MktCap_USE_PERCENTILE = True   # B+C: percentile-based with OAMV regime
 MAIN_BOARD_PREFIXES = ('000', '002', '003', '600', '601', '603', '605')
