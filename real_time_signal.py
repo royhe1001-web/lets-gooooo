@@ -305,6 +305,59 @@ def load_positions(manual_path=None):
     return load_backtest_positions()
 
 
+def _load_yesterday_close(symbols):
+    """从K线读取昨收价, 返回{sym: close}"""
+    from pathlib import Path as _P
+    kline_dir = _P('output/kline')
+    result = {}
+    for sym in symbols:
+        kf = kline_dir / f'{sym}.csv'
+        if kf.exists():
+            df = pd.read_csv(kf, parse_dates=['date'])
+            if not df.empty and 'close' in df.columns:
+                result[sym] = float(df['close'].iloc[-1])
+    return result
+
+
+def _load_yesterday_equity():
+    """读取回测最近一天总权益(作为今日基线)"""
+    nav_csv = os.path.join(BACKTEST_DIR, 'daily_nav.csv')
+    if os.path.exists(nav_csv):
+        nav = pd.read_csv(nav_csv)
+        if not nav.empty:
+            if 'oamv_divergence' in nav.columns:
+                real = nav[nav['oamv_divergence'] != 'realtime_preview']
+                if not real.empty:
+                    return float(real.iloc[-1]['total_equity'])
+            return float(nav.iloc[-1]['total_equity'])
+    return 0.0
+
+
+def _load_daily_history(date_str):
+    """加载今日累计操作记录"""
+    hf = os.path.join(SIGNAL_DIR, f'{date_str}_history.json')
+    if os.path.exists(hf):
+        with open(hf, 'r') as f:
+            return json.load(f)
+    return {'sells': [], 'buys': [], 'holds': []}
+
+
+def _save_daily_history(date_str, history):
+    os.makedirs(SIGNAL_DIR, exist_ok=True)
+    with open(os.path.join(SIGNAL_DIR, f'{date_str}_history.json'), 'w') as f:
+        json.dump(history, f, ensure_ascii=False, indent=2, default=str)
+
+
+def _merge_trade(hist_list, trade, action):
+    """合并操作: 同symbol+同action覆盖, 否则追加"""
+    sym = trade.get('symbol', '')
+    for i, h in enumerate(hist_list):
+        if h.get('symbol') == sym and h.get('action', action) == action:
+            hist_list[i] = {**trade, 'action': action}
+            return
+    hist_list.append({**trade, 'action': action})
+
+
 def push_to_backtest(decision, regime, oamv_score, today_str, positions_after):
     """将今日信号回推到回测 CSV（daily_positions + daily_nav 预估）"""
     os.makedirs(BACKTEST_DIR, exist_ok=True)
@@ -565,10 +618,17 @@ class RealtimeDecisionEngine:
                         'shares': pos['shares'],
                         'days_held': (self.today - pos['buy_date']).days,
                     })
+            # 计算持仓市值
+            pos_val = 0.0
+            for code, pos in positions_dict.items():
+                px = self._get_price(code, self.today)
+                if px and pos.get('shares', 0) > 0:
+                    pos_val += px * pos['shares']
             return {
                 'sells': sell_list, 'buys': [], 'holds': holds,
                 'regime': regime, 'candidates': 0,
                 'is_defensive': is_defensive, 'is_rebalance': False,
+                'position_value': pos_val, 'cash': 0.0,
             }
 
         # 2. 调仓日: 状态切换额外卖出
@@ -642,10 +702,26 @@ class RealtimeDecisionEngine:
                     'days_held': (self.today - pos['buy_date']).days,
                 })
 
+        # 计算持仓市值(含今日买入)
+        pos_val = 0.0
+        all_held = set(positions_dict.keys()) - {s[0] for s in sell_list}
+        all_held |= {b['symbol'] for b in buy_list}
+        for code in all_held:
+            px = self._get_price(code, self.today)
+            if code in positions_dict:
+                shares = positions_dict[code].get('shares', 0)
+            else:
+                shares = next((b['shares'] for b in buy_list if b['symbol'] == code), 0)
+            if px and shares > 0:
+                pos_val += px * shares
+        # 估算现金: 总权益-持仓市值 (简化)
+        yesterday_eq = _load_yesterday_equity()
+        cash_est = max(0, yesterday_eq - pos_val) if yesterday_eq > 0 else 0
         return {
             'sells': sell_list, 'buys': buy_list, 'holds': holds,
             'regime': regime, 'candidates': len(raw_signals),
             'is_defensive': is_defensive, 'is_rebalance': True,
+            'position_value': pos_val, 'cash': cash_est,
         }
 
 
@@ -731,28 +807,88 @@ def main():
           f'{" [禁止开仓]" if decision["is_defensive"] else ""}')
     print(f'  类型: {"调仓日 (T+4/状态切换)" if is_rebalance else "非调仓日 (仅检查止损)"}')
 
+    # --- 昨收基线 (用于今日盈亏) ---
+    all_syms = []
+    for code, _ in decision.get('sells', []):
+        all_syms.append(code)
+    for b in decision.get('buys', []):
+        all_syms.append(b['symbol'])
+    for h in decision.get('holds', []):
+        all_syms.append(h['symbol'])
+    yesterday_close = _load_yesterday_close(all_syms)
+    yesterday_equity = _load_yesterday_equity()
+
+    # --- 卖出 ---
     if decision['sells']:
         print(f'\n  ═══ 卖出 ═══')
         for code, reason in decision['sells']:
-            px_info = f'@{rt_df.loc[code,"price"]:.2f}' if code in rt_df.index else ''
-            print(f'  SELL {code} {px_info}  reason={reason}')
+            cp = rt_df.loc[code, 'price'] if code in rt_df.index else 0
+            yc = yesterday_close.get(code, np.nan)
+            today_pnl = (cp - yc) / yc if not np.isnan(yc) and yc > 0 else 0.0
+            loss_val = (cp - yc) if not np.isnan(yc) and not np.isnan(cp) else 0
+            # Get shares and entry from positions
+            pos_info = positions.get(code, {})
+            shares = pos_info.get('shares', 0)
+            total_loss = shares * loss_val
+            print(f'  SELL {code} @{cp:.2f} 累计{(cp/pos_info.get("buy_price",cp)-1):+.1%}'
+                  f' | 今日{total_loss:+,.0f}元({today_pnl:+.2%}) | {reason}')
 
+    # --- 买入 ---
     if decision['buys']:
         print(f'\n  ═══ 买入 ═══')
         for b in decision['buys']:
+            bp = b.get('price', 0)
+            yc = yesterday_close.get(b['symbol'], np.nan)
+            vs_yc = (bp - yc) / yc if not np.isnan(yc) and yc > 0 else 0.0
             print(f'  BUY  {b["symbol"]} {b.get("name","")}  '
-                  f'@{b["price"]} × {b["shares"]}股 ≈ ¥{b["amount"]:,.0f}  '
-                  f'w={b["weight"]:.2f} [{b["reason"]}]')
+                  f'@{bp:.2f} (vs昨收{vs_yc:+.1%}) × {b["shares"]}股 '
+                  f'≈ ¥{b["amount"]:,.0f}  w={b["weight"]:.2f} [{b["reason"]}]')
 
+    # --- 持有 ---
     if decision['holds']:
         print(f'\n  ═══ 持有 ═══')
         for h in decision['holds']:
-            print(f'  HOLD {h["symbol"]}  @{h["price"]}  '
-                  f'ret={h["return"]:+.1%}  days={h["days_held"]}')
+            sym = h['symbol']
+            cp = h.get('price', 0)
+            yc = yesterday_close.get(sym, np.nan)
+            today_pnl = (cp - yc) / yc if not np.isnan(yc) and yc > 0 else 0.0
+            print(f'  HOLD {sym}  @{cp:.2f}  '
+                  f'ret={h["return"]:+.1%} | 今日{today_pnl:+.2%}  days={h["days_held"]}')
 
     if not decision['sells'] and not decision['buys']:
         tag = '非调仓日无操作' if not is_rebalance else '无符合条件的操作'
         print(f'\n  {tag}')
+
+    # --- 净值 + 总盈亏 ---
+    pos_val = decision.get('position_value', 0)
+    cash_est = decision.get('cash', 0)
+    total_eq = cash_est + pos_val if cash_est > 0 else pos_val
+    daily_pnl = total_eq - yesterday_equity if yesterday_equity > 0 else 0
+    if yesterday_equity > 0:
+        print(f'\n  现金: ¥{cash_est:,.0f} | 持仓市值: ¥{pos_val:,.0f} | 总权益: ¥{total_eq:,.0f}')
+        print(f'  今日总盈亏: ¥{daily_pnl:+,.0f} ({daily_pnl/yesterday_equity:+.2%})')
+
+    # --- 今日累计操作 ---
+    history = _load_daily_history(today_str)
+    for code, reason in decision.get('sells', []):
+        cp = rt_df.loc[code, 'price'] if code in rt_df.index else 0
+        _merge_trade(history['sells'], {'symbol': code, 'price': cp, 'reasons': reason}, 'SELL')
+    for b in decision.get('buys', []):
+        _merge_trade(history['buys'], {'symbol': b['symbol'], 'price': b.get('price',0),
+                      'side': b.get('reason','?'), 'amount': b.get('amount',0)}, 'BUY')
+    # 只在执行时持久化历史
+    if args.execute:
+        _save_daily_history(today_str, history)
+
+    total_sells_today = len(history.get('sells', []))
+    total_buys_today = len(history.get('buys', []))
+    if total_sells_today > 0 or total_buys_today > 0:
+        print(f'\n  --- 今日累计操作 ---')
+        for s in history.get('sells', []):
+            print(f'  卖出 {s["symbol"]} @{s.get("price","?"):.2f} | {s.get("reasons","")}')
+        for b in history.get('buys', []):
+            print(f'  买入 {b["symbol"]} [{b.get("side","?")}] '
+                  f'@{b.get("price","?"):.2f} ¥{b.get("amount",0):,.0f}')
 
     # P15: 执行价格警告
     if decision['buys']:
