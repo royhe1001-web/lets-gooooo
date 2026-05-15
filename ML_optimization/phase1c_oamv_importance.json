@@ -1,0 +1,291 @@
+{
+  "phase": "phase1c_oamv_features",
+  "model": "RandomForest",
+  "rf_auc": 0.6776456996229511,
+  "rf_accuracy": 0.6716651046547953,
+  "phase1_auc": 0.6273,
+  "phase1b_auc": 0.6287,
+  "auc_improvement_vs_phase1b_bps": 4.9,
+  "n_samples": 16003,
+  "n_features_total": 95,
+  "n_features_oamv": 18,
+  "oamv_features_in_top30": 11,
+  "positive_ratio": 0.24807848528400925,
+  "top_features": [
+    {
+      "feature": "oamv_volatility_20d",
+      "rf_importance": 0.0665,
+      "type": "OAMV"
+    },
+    {
+      "feature": "vol_half_above_count",
+      "rf_importance": 0.0661,
+      "type": "B2"
+    },
+    {
+      "feature": "oamv_cyc13",
+      "rf_importance": 0.0385,
+      "type": "OAMV"
+    },
+    {
+      "feature": "oamv_diff",
+      "rf_importance": 0.0365,
+      "type": "OAMV"
+    },
+    {
+      "feature": "oamv_change_5d",
+      "rf_importance": 0.0349,
+      "type": "OAMV"
+    },
+    {
+      "feature": "vol_half_above_4d",
+      "rf_importance": 0.0343,
+      "type": "B2"
+    },
+    {
+      "feature": "vol_change_1d",
+      "rf_importance": 0.0337,
+      "type": "B2"
+    },
+    {
+      "feature": "oamv_change_3d",
+      "rf_importance": 0.0322,
+      "type": "OAMV"
+    },
+    {
+      "feature": "oamv_amount_ratio",
+      "rf_importance": 0.0286,
+      "type": "OAMV"
+    },
+    {
+      "feature": "vol_double",
+      "rf_importance": 0.0276,
+      "type": "B2"
+    },
+    {
+      "feature": "oamv_change_pct",
+      "rf_importance": 0.0276,
+      "type": "OAMV"
+    },
+    {
+      "feature": "oamv_cyc5_slope",
+      "rf_importance": 0.0273,
+      "type": "OAMV"
+    },
+    {
+      "feature": "oamv",
+      "rf_importance": 0.027,
+      "type": "OAMV"
+    },
+    {
+      "feature": "oamv_cyc5",
+      "rf_importance": 0.0254,
+      "type": "OAMV"
+    },
+    {
+      "feature": "vol_ratio_5",
+      "rf_importance": 0.0191,
+      "type": "B2"
+    },
+    {
+      "feature": "volatility_5d",
+      "rf_importance": 0.0188,
+      "type": "B2"
+    },
+    {
+      "feature": "volatility_20d",
+      "rf_importance": 0.0187,
+      "type": "B2"
+    },
+    {
+      "feature": "oamv_direction",
+      "rf_importance": 0.0158,
+      "type": "OAMV"
+    },
+    {
+      "feature": "ret_1d",
+      "rf_importance": 0.0139,
+      "type": "B2"
+    },
+    {
+      "feature": "vol_ma20",
+      "rf_importance": 0.0127,
+      "type": "B2"
+    },
+    {
+      "feature": "ma_120_bias",
+      "rf_importance": 0.0123,
+      "type": "B2"
+    },
+    {
+      "feature": "vol_ratio_20",
+      "rf_importance": 0.012,
+      "type": "B2"
+    },
+    {
+      "feature": "amplitude",
+      "rf_importance": 0.0114,
+      "type": "B2"
+    },
+    {
+      "feature": "gap",
+      "rf_importance": 0.0114,
+      "type": "B2"
+    },
+    {
+      "feature": "ret_60d",
+      "rf_importance": 0.0113,
+      "type": "B2"
+    },
+    {
+      "feature": "ma_5_bias",
+      "rf_importance": 0.0105,
+      "type": "B2"
+    },
+    {
+      "feature": "D",
+      "rf_importance": 0.0105,
+      "type": "B2"
+    },
+    {
+      "feature": "RSI_12",
+      "rf_importance": 0.0102,
+      "type": "B2"
+    },
+    {
+      "feature": "J_slope",
+      "rf_importance": 0.0101,
+      "type": "B2"
+    },
+    {
+      "feature": "K",
+      "rf_importance": 0.0098,
+      "type": "B2"
+    },
+    {
+      "feature": "K_D_cross",
+      "rf_importance": 0.0094,
+      "type": "B2"
+    },
+    {
+      "feature": "ma_60_bias",
+      "rf_importance": 0.0091,
+      "type": "B2"
+    },
+    {
+      "feature": "RSI_24",
+      "rf_importance": 0.009,
+      "type": "B2"
+    },
+    {
+      "feature": "max_dd_20d",
+      "rf_importance": 0.009,
+      "type": "B2"
+    },
+    {
+      "feature": "lower_shadow",
+      "rf_importance": 0.0087,
+      "type": "B2"
+    },
+    {
+      "feature": "ret_5d",
+      "rf_importance": 0.0085,
+      "type": "B2"
+    },
+    {
+      "feature": "vol_ma5",
+      "rf_importance": 0.0085,
+      "type": "B2"
+    },
+    {
+      "feature": "vol_sky_floor_ratio",
+      "rf_importance": 0.0084,
+      "type": "B2"
+    },
+    {
+      "feature": "K_slope",
+      "rf_importance": 0.0081,
+      "type": "B2"
+    },
+    {
+      "feature": "ma_10_bias",
+      "rf_importance": 0.0079,
+      "type": "B2"
+    }
+  ],
+  "top_oamv_features": [
+    {
+      "feature": "oamv_volatility_20d",
+      "rf_importance": 0.0665
+    },
+    {
+      "feature": "oamv_cyc13",
+      "rf_importance": 0.0385
+    },
+    {
+      "feature": "oamv_diff",
+      "rf_importance": 0.0365
+    },
+    {
+      "feature": "oamv_change_5d",
+      "rf_importance": 0.0349
+    },
+    {
+      "feature": "oamv_change_3d",
+      "rf_importance": 0.0322
+    },
+    {
+      "feature": "oamv_amount_ratio",
+      "rf_importance": 0.0286
+    },
+    {
+      "feature": "oamv_change_pct",
+      "rf_importance": 0.0276
+    },
+    {
+      "feature": "oamv_cyc5_slope",
+      "rf_importance": 0.0273
+    },
+    {
+      "feature": "oamv",
+      "rf_importance": 0.027
+    },
+    {
+      "feature": "oamv_cyc5",
+      "rf_importance": 0.0254
+    },
+    {
+      "feature": "oamv_direction",
+      "rf_importance": 0.0158
+    },
+    {
+      "feature": "oamv_is_aggressive",
+      "rf_importance": 0.0048
+    },
+    {
+      "feature": "oamv_divergence",
+      "rf_importance": 0.0021
+    },
+    {
+      "feature": "oamv_is_normal",
+      "rf_importance": 0.0017
+    },
+    {
+      "feature": "oamv_trend",
+      "rf_importance": 0.0013
+    },
+    {
+      "feature": "oamv_is_defensive",
+      "rf_importance": 0.0003
+    },
+    {
+      "feature": "oamv_signal",
+      "rf_importance": 0.0003
+    },
+    {
+      "feature": "oamv_golden_in_aggressive",
+      "rf_importance": 0.0
+    }
+  ],
+  "elapsed_seconds": 624.8408517837524
+}

@@ -1,0 +1,253 @@
+{
+  "phase": "phase4_lightgbm_classifier",
+  "model": "LightGBM",
+  "params": {
+    "objective": "binary",
+    "metric": "auc",
+    "boosting_type": "gbdt",
+    "num_leaves": 31,
+    "max_depth": 6,
+    "learning_rate": 0.05,
+    "feature_fraction": 0.8,
+    "bagging_fraction": 0.8,
+    "bagging_freq": 5,
+    "min_data_in_leaf": 20,
+    "scale_pos_weight": 0.9121052631578948,
+    "lambda_l1": 0.1,
+    "lambda_l2": 0.1,
+    "verbose": -1,
+    "random_state": 42,
+    "num_threads": 8
+  },
+  "roc_auc": 0.5987,
+  "average_precision": 0.5806,
+  "accuracy": 0.5548,
+  "precision_class1": 0.6175,
+  "recall_class1": 0.2311,
+  "f1_class1": 0.3363,
+  "n_features": 44,
+  "n_train_signals": 7266,
+  "n_test_signals": 1817,
+  "train_positive_ratio": 0.523,
+  "test_positive_ratio": 0.4882,
+  "simulation": {
+    "unfiltered": {
+      "trades": 1817,
+      "win_rate": 0.4882,
+      "mean_return": 0.009213
+    },
+    "lgbm_filtered": {
+      "trades": 332,
+      "win_rate": 0.6175,
+      "mean_return": 0.028549
+    },
+    "lgbm_high_conf": {
+      "trades": 0,
+      "win_rate": 0.0,
+      "mean_return": 0.0
+    }
+  },
+  "top_features": [
+    {
+      "feature": "oamv_change_pct",
+      "gain": 1500,
+      "type": "OAMV"
+    },
+    {
+      "feature": "oamv_volatility_20d",
+      "gain": 1030,
+      "type": "OAMV"
+    },
+    {
+      "feature": "oamv_change_3d",
+      "gain": 679,
+      "type": "OAMV"
+    },
+    {
+      "feature": "oamv_amount_ratio",
+      "gain": 551,
+      "type": "OAMV"
+    },
+    {
+      "feature": "j_prev_diff",
+      "gain": 373,
+      "type": "B2"
+    },
+    {
+      "feature": "ret_5d",
+      "gain": 336,
+      "type": "B2"
+    },
+    {
+      "feature": "oamv_change_5d",
+      "gain": 336,
+      "type": "OAMV"
+    },
+    {
+      "feature": "volume_ratio_1d",
+      "gain": 303,
+      "type": "B2"
+    },
+    {
+      "feature": "macd_dif",
+      "gain": 294,
+      "type": "B2"
+    },
+    {
+      "feature": "white_yellow_distance",
+      "gain": 257,
+      "type": "B2"
+    },
+    {
+      "feature": "ret_20d",
+      "gain": 226,
+      "type": "B2"
+    },
+    {
+      "feature": "pullback_10d",
+      "gain": 219,
+      "type": "B2"
+    },
+    {
+      "feature": "macd_dea",
+      "gain": 192,
+      "type": "B2"
+    },
+    {
+      "feature": "volume_ratio_5d",
+      "gain": 165,
+      "type": "B2"
+    },
+    {
+      "feature": "k",
+      "gain": 156,
+      "type": "B2"
+    },
+    {
+      "feature": "white_line",
+      "gain": 153,
+      "type": "B2"
+    },
+    {
+      "feature": "shadow_lower",
+      "gain": 149,
+      "type": "B2"
+    },
+    {
+      "feature": "macd_hist_diff",
+      "gain": 145,
+      "type": "B2"
+    },
+    {
+      "feature": "b2_position_weight",
+      "gain": 130,
+      "type": "B2"
+    },
+    {
+      "feature": "j",
+      "gain": 120,
+      "type": "B2"
+    },
+    {
+      "feature": "macd_hist",
+      "gain": 118,
+      "type": "B2"
+    },
+    {
+      "feature": "brick_val",
+      "gain": 112,
+      "type": "BRICK"
+    },
+    {
+      "feature": "volume_ratio_20d",
+      "gain": 110,
+      "type": "B2"
+    },
+    {
+      "feature": "shadow_upper",
+      "gain": 95,
+      "type": "B2"
+    },
+    {
+      "feature": "yellow_line",
+      "gain": 94,
+      "type": "B2"
+    },
+    {
+      "feature": "gap_ratio",
+      "gain": 84,
+      "type": "B2"
+    },
+    {
+      "feature": "d",
+      "gain": 60,
+      "type": "B2"
+    },
+    {
+      "feature": "gain_today",
+      "gain": 51,
+      "type": "B2"
+    },
+    {
+      "feature": "oamv_signal",
+      "gain": 42,
+      "type": "OAMV"
+    },
+    {
+      "feature": "ret_10d",
+      "gain": 39,
+      "type": "B2"
+    },
+    {
+      "feature": "close_to_high_ratio",
+      "gain": 34,
+      "type": "B2"
+    },
+    {
+      "feature": "brick_red_streak",
+      "gain": 9,
+      "type": "BRICK"
+    },
+    {
+      "feature": "b2_prior_strong",
+      "gain": 0,
+      "type": "B2"
+    },
+    {
+      "feature": "close_above_yellow",
+      "gain": 0,
+      "type": "B2"
+    },
+    {
+      "feature": "white_above_yellow",
+      "gain": 0,
+      "type": "B2"
+    },
+    {
+      "feature": "brick_rising",
+      "gain": 0,
+      "type": "BRICK"
+    },
+    {
+      "feature": "cross_below_yellow",
+      "gain": 0,
+      "type": "B2"
+    },
+    {
+      "feature": "brick_green_streak",
+      "gain": 0,
+      "type": "BRICK"
+    },
+    {
+      "feature": "brick_green_to_red",
+      "gain": 0,
+      "type": "BRICK"
+    },
+    {
+      "feature": "brick_red_to_green",
+      "gain": 0,
+      "type": "BRICK"
+    }
+  ],
+  "elapsed_seconds": 766.0476467609406
+}

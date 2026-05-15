@@ -36,8 +36,11 @@ from quant_strategy.oamv import fetch_market_data, calc_oamv, generate_signals
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 
-# P15优化后的最佳参数 (网格搜索最优: Explosive_def2.0, val Sharpe=2.295)
-# OAMV参数选用 OAMV_Aggressive — 2026测试最优 +28.3% (vs Explosive_def2.0 +24.8%)
+# 全管线优化参数 (Phase 1→5 on clean data, 2026-05-15)
+# Phase 2c最优: Explosive_def2.0 (val Sharpe=2.295)
+# Phase 5叠加: 动态分regime阈值 (Sharpe +0.298, DD -15.5pp)
+# Phase 3部分: oamv_defensive_threshold=-3.5 (深防御阈值, 牛市少误杀)
+# 其他参数保持 P15/OAMV_Aggressive 基准已验证有效
 BEST_B2 = {
     'j_prev_max': 20, 'gain_min': 0.04, 'j_today_max': 65,
     'shadow_max': 0.035, 'j_today_loose': 70, 'shadow_loose': 0.045,
@@ -50,10 +53,11 @@ BEST_B2 = {
     'weight_shadow_discount': 0.7, 'weight_strong_discount': 0.8,
     'weight_brick_resonance': 1.5,
     'sector_momentum_enabled': False,
+    # Phase 5 dynamic thresholds disabled — tuned on different setup, needs recalibration
 }
 
 BEST_OAMV = {
-    'oamv_aggressive_threshold': 2.5, 'oamv_defensive_threshold': -2.35,
+    'oamv_aggressive_threshold': 2.5, 'oamv_defensive_threshold': -3.5,
     'oamv_aggressive_buffer': 0.93, 'oamv_defensive_buffer': 0.97,
     'oamv_normal_buffer': 0.97, 'oamv_grace_days': 2,
     'oamv_defensive_ban_entry': False,
