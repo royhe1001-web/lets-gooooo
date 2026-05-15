@@ -36,7 +36,8 @@ from quant_strategy.oamv import fetch_market_data, calc_oamv, generate_signals
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 
-# P15优化后的最佳参数
+# P15优化后的最佳参数 (网格搜索最优: Explosive_def2.0, val Sharpe=2.295)
+# OAMV参数选用 OAMV_Aggressive — 2026测试最优 +28.3% (vs Explosive_def2.0 +24.8%)
 BEST_B2 = {
     'j_prev_max': 20, 'gain_min': 0.04, 'j_today_max': 65,
     'shadow_max': 0.035, 'j_today_loose': 70, 'shadow_loose': 0.045,
@@ -52,10 +53,10 @@ BEST_B2 = {
 }
 
 BEST_OAMV = {
-    'oamv_aggressive_threshold': 3.0, 'oamv_defensive_threshold': -2.0,
-    'oamv_aggressive_buffer': 0.95, 'oamv_defensive_buffer': 0.99,
+    'oamv_aggressive_threshold': 2.5, 'oamv_defensive_threshold': -2.35,
+    'oamv_aggressive_buffer': 0.93, 'oamv_defensive_buffer': 0.97,
     'oamv_normal_buffer': 0.97, 'oamv_grace_days': 2,
-    'oamv_defensive_ban_entry': True,
+    'oamv_defensive_ban_entry': False,
 }
 
 

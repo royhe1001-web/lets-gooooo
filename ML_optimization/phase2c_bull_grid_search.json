@@ -9,6 +9,11 @@
         "end": "2015-06-12"
       },
       {
+        "name": "Range_2016-2017",
+        "start": "2016-01-01",
+        "end": "2017-12-31"
+      },
+      {
         "name": "Bull2_2020-2021",
         "start": "2020-03-23",
         "end": "2021-12-13"
@@ -20,122 +25,212 @@
       }
     ],
     "val": "2025-07-01 ~ 2025-12-31",
-    "test": "2026-01-01 ~ latest (dynamic)"
+    "test": "2026-01-01 ~ 2026-05-15"
   },
   "stage1_top5": [
     {
       "name": "Explosive_agg2.5",
-      "z": 0.017327672092426596,
-      "n_signals": 1317
+      "z": 0.017276388404891135,
+      "n_signals": 1321
     },
     {
       "name": "OAMV_Aggressive",
-      "z": 0.017327672092426596,
-      "n_signals": 1317
+      "z": 0.017276388404891135,
+      "n_signals": 1321
     },
     {
       "name": "Explosive_def2.0",
-      "z": 0.017068225986955045,
-      "n_signals": 1200
+      "z": 0.017072469791499064,
+      "n_signals": 1202
     },
     {
-      "name": "Explosive_SectorOff",
-      "z": 0.017068225986955045,
-      "n_signals": 1200
+      "name": "OAMV_Conservative",
+      "z": 0.01670349764755297,
+      "n_signals": 1186
     },
     {
-      "name": "Explosive_SectorTight",
-      "z": 0.017061131021131465,
-      "n_signals": 1200
+      "name": "Explosive_agg3.0",
+      "z": 0.016238669990251375,
+      "n_signals": 1233
     }
   ],
   "stage2_grid_top10": [
     {
       "b2_name": "Explosive_def2.0",
       "stop_profile": "None",
-      "sharpe": 0.5967373711804884,
-      "total_return": 0.8629680330000029,
-      "total_return_pct": 86.29680330000029,
-      "win_rate": 0.17551789077212807,
-      "max_dd": 0.39405205250918374,
-      "n_trades": 387,
+      "sharpe": 1.1569786721353672,
+      "total_return": 2.1037913340000114,
+      "total_return_pct": 210.37913340000114,
+      "win_rate": 0.18251775473776158,
+      "max_dd": 0.4949286304189495,
+      "n_trades": 463,
       "stop_counts": {
-        "sig": 208,
-        "rotate": 32,
-        "candle": 80,
-        "yellow": 52,
-        "60d": 1,
-        "final": 14
+        "sig": 264,
+        "candle": 28,
+        "trail": 24,
+        "rotate": 60,
+        "peak": 47,
+        "take": 39,
+        "60d": 1
       }
     },
     {
-      "b2_name": "Explosive_SectorOff",
+      "b2_name": "OAMV_Conservative",
       "stop_profile": "None",
-      "sharpe": 0.5967373711804884,
-      "total_return": 0.8629680330000029,
-      "total_return_pct": 86.29680330000029,
-      "win_rate": 0.17551789077212807,
-      "max_dd": 0.39405205250918374,
-      "n_trades": 387,
+      "sharpe": 1.0844261567661653,
+      "total_return": 2.0121470840000106,
+      "total_return_pct": 201.21470840000106,
+      "win_rate": 0.1799142772686964,
+      "max_dd": 0.4949286304189495,
+      "n_trades": 454,
       "stop_counts": {
-        "sig": 208,
-        "rotate": 32,
-        "candle": 80,
-        "yellow": 52,
-        "60d": 1,
-        "final": 14
+        "sig": 262,
+        "candle": 30,
+        "trail": 24,
+        "rotate": 53,
+        "peak": 45,
+        "take": 39,
+        "60d": 1
       }
     },
     {
       "b2_name": "OAMV_Aggressive",
       "stop_profile": "None",
-      "sharpe": 0.41285357619734847,
-      "total_return": 0.6528819400000043,
-      "total_return_pct": 65.28819400000043,
-      "win_rate": 0.17484982155919582,
-      "max_dd": 0.37359522102059156,
-      "n_trades": 426,
+      "sharpe": 0.8458670617203662,
+      "total_return": 1.6765833930000136,
+      "total_return_pct": 167.65833930000136,
+      "win_rate": 0.18230592529657952,
+      "max_dd": 0.391186207224493,
+      "n_trades": 513,
       "stop_counts": {
-        "candle": 80,
-        "sig": 242,
-        "rotate": 37,
-        "yellow": 53,
+        "sig": 296,
+        "take": 45,
+        "trail": 26,
+        "candle": 31,
+        "rotate": 62,
+        "peak": 51,
         "60d": 1,
-        "final": 13
+        "yellow": 1
       }
     },
     {
       "b2_name": "Explosive_agg2.5",
       "stop_profile": "None",
-      "sharpe": 0.30027428048000954,
-      "total_return": 0.45546242300000306,
-      "total_return_pct": 45.54624230000031,
-      "win_rate": 0.1666428684753292,
-      "max_dd": 0.388642528082788,
-      "n_trades": 411,
+      "sharpe": 0.7069682717335487,
+      "total_return": 1.4989453070000092,
+      "total_return_pct": 149.89453070000093,
+      "win_rate": 0.17707011268797354,
+      "max_dd": 0.5260291082480688,
+      "n_trades": 459,
       "stop_counts": {
-        "candle": 82,
-        "sig": 230,
-        "rotate": 34,
-        "yellow": 51,
+        "sig": 267,
+        "candle": 33,
+        "trail": 22,
+        "rotate": 51,
+        "peak": 44,
+        "take": 40,
         "60d": 1,
-        "final": 13
+        "yellow": 1
+      }
+    },
+    {
+      "b2_name": "Explosive_agg3.0",
+      "stop_profile": "None",
+      "sharpe": 0.6218889622579968,
+      "total_return": 1.2790724710000099,
+      "total_return_pct": 127.90724710000099,
+      "win_rate": 0.17458568239433955,
+      "max_dd": 0.5129598422105248,
+      "n_trades": 463,
+      "stop_counts": {
+        "sig": 271,
+        "candle": 31,
+        "trail": 24,
+        "rotate": 56,
+        "peak": 41,
+        "take": 38,
+        "60d": 1,
+        "yellow": 1
       }
     }
   ],
   "stage3_val_results": [
     {
-      "total_return": 0.2905112490000006,
-      "total_return_pct": 29.051124900000058,
-      "sharpe": 0.8191046009535843,
-      "n_trades": 49,
-      "n_signals": 49,
-      "win_rate": 0.3469387755102041,
-      "max_dd": 0.0,
-      "final_value": 129051.12490000005,
-      "aggressive_buys": 9,
-      "defensive_buys": 1,
-      "normal_buys": 39,
+      "total_return": 0.974601083000002,
+      "total_return_pct": 97.4601083000002,
+      "sharpe": 2.2954159134682555,
+      "n_trades": 56,
+      "n_signals": 52,
+      "win_rate": 0.5,
+      "max_dd": 0.22644983240833166,
+      "final_value": 197460.1083000002,
+      "aggressive_buys": 1,
+      "defensive_buys": 2,
+      "normal_buys": 49,
+      "filter_stats": {
+        "pct_pass": 109,
+        "pct_fail": 140,
+        "liq_pass": 0,
+        "liq_fail": 0,
+        "total_signals": 249,
+        "filtered_signals": 140
+      },
+      "stop_counts": {
+        "sig": 29,
+        "take": 9,
+        "trail": 5,
+        "peak": 9,
+        "rotate": 3,
+        "candle": 1
+      },
+      "label": "Explosive_def2.0",
+      "b2_name": "Explosive_def2.0",
+      "stop_profile": "None"
+    },
+    {
+      "total_return": 0.974601083000002,
+      "total_return_pct": 97.4601083000002,
+      "sharpe": 2.2954159134682555,
+      "n_trades": 56,
+      "n_signals": 52,
+      "win_rate": 0.5,
+      "max_dd": 0.22644983240833166,
+      "final_value": 197460.1083000002,
+      "aggressive_buys": 1,
+      "defensive_buys": 2,
+      "normal_buys": 49,
+      "filter_stats": {
+        "pct_pass": 108,
+        "pct_fail": 141,
+        "liq_pass": 0,
+        "liq_fail": 0,
+        "total_signals": 249,
+        "filtered_signals": 141
+      },
+      "stop_counts": {
+        "sig": 29,
+        "take": 9,
+        "trail": 5,
+        "peak": 9,
+        "rotate": 3,
+        "candle": 1
+      },
+      "label": "OAMV_Conservative",
+      "b2_name": "OAMV_Conservative",
+      "stop_profile": "None"
+    },
+    {
+      "total_return": 0.5220977775000015,
+      "total_return_pct": 52.20977775000015,
+      "sharpe": 1.1573299086351159,
+      "n_trades": 76,
+      "n_signals": 73,
+      "win_rate": 0.39473684210526316,
+      "max_dd": 0.20854160521239554,
+      "final_value": 152209.77775000015,
+      "aggressive_buys": 20,
+      "defensive_buys": 2,
+      "normal_buys": 51,
       "filter_stats": {
         "pct_pass": 123,
         "pct_fail": 138,
@@ -145,173 +240,112 @@
         "filtered_signals": 138
       },
       "stop_counts": {
-        "sig": 25,
-        "rotate": 5,
-        "candle": 7,
-        "yellow": 5,
-        "60d": 1,
-        "final": 6
+        "sig": 43,
+        "take": 7,
+        "trail": 5,
+        "candle": 4,
+        "peak": 8,
+        "rotate": 9
       },
       "label": "OAMV_Aggressive",
       "b2_name": "OAMV_Aggressive",
-      "stop_profile": "None"
-    },
-    {
-      "total_return": 0.1622487900000007,
-      "total_return_pct": 16.22487900000007,
-      "sharpe": 0.42114686538057017,
-      "n_trades": 44,
-      "n_signals": 44,
-      "win_rate": 0.3409090909090909,
-      "max_dd": 0.0,
-      "final_value": 116224.87900000006,
-      "aggressive_buys": 7,
-      "defensive_buys": 1,
-      "normal_buys": 36,
-      "filter_stats": {
-        "pct_pass": 109,
-        "pct_fail": 140,
-        "liq_pass": 0,
-        "liq_fail": 0,
-        "total_signals": 249,
-        "filtered_signals": 140
-      },
-      "stop_counts": {
-        "sig": 23,
-        "rotate": 4,
-        "yellow": 4,
-        "candle": 6,
-        "60d": 1,
-        "final": 6
-      },
-      "label": "Explosive_def2.0",
-      "b2_name": "Explosive_def2.0",
-      "stop_profile": "None"
-    },
-    {
-      "total_return": 0.1622487900000007,
-      "total_return_pct": 16.22487900000007,
-      "sharpe": 0.42114686538057017,
-      "n_trades": 44,
-      "n_signals": 44,
-      "win_rate": 0.3409090909090909,
-      "max_dd": 0.0,
-      "final_value": 116224.87900000006,
-      "aggressive_buys": 7,
-      "defensive_buys": 1,
-      "normal_buys": 36,
-      "filter_stats": {
-        "pct_pass": 109,
-        "pct_fail": 140,
-        "liq_pass": 0,
-        "liq_fail": 0,
-        "total_signals": 249,
-        "filtered_signals": 140
-      },
-      "stop_counts": {
-        "sig": 23,
-        "rotate": 4,
-        "yellow": 4,
-        "candle": 6,
-        "60d": 1,
-        "final": 6
-      },
-      "label": "Explosive_SectorOff",
-      "b2_name": "Explosive_SectorOff",
       "stop_profile": "None"
     }
   ],
   "stage4_test_results": [
     {
-      "total_return_pct": 36.61677640000003,
-      "sharpe": 0.6095406181600344,
-      "n_trades": 68,
-      "n_signals": 68,
-      "win_rate": 0.27941176470588236,
-      "max_dd": 0.2761020212405292,
-      "final_value": 136616.77640000003,
-      "aggressive_buys": 21,
-      "defensive_buys": 0,
-      "normal_buys": 47,
+      "total_return_pct": 24.834485350000147,
+      "sharpe": 0.5017331564049736,
+      "n_trades": 67,
+      "n_signals": 66,
+      "win_rate": 0.34328358208955223,
+      "max_dd": 0.24988790082778525,
+      "final_value": 124834.48535000015,
+      "aggressive_buys": 23,
+      "defensive_buys": 1,
+      "normal_buys": 42,
       "filter_stats": {
-        "pct_pass": 186,
-        "pct_fail": 132,
+        "pct_pass": 189,
+        "pct_fail": 135,
         "liq_pass": 0,
         "liq_fail": 0,
-        "total_signals": 318,
-        "filtered_signals": 132
+        "total_signals": 324,
+        "filtered_signals": 135
       },
       "stop_counts": {
-        "rotate": 11,
-        "sig": 42,
-        "candle": 8,
-        "yellow": 1,
-        "final": 6
-      },
-      "label": "OAMV_Aggressive",
-      "b2_name": "OAMV_Aggressive"
-    },
-    {
-      "total_return_pct": 19.57222060000006,
-      "sharpe": 0.33463260488866814,
-      "n_trades": 69,
-      "n_signals": 69,
-      "win_rate": 0.30434782608695654,
-      "max_dd": 0.2708697372942003,
-      "final_value": 119572.22060000006,
-      "aggressive_buys": 21,
-      "defensive_buys": 0,
-      "normal_buys": 48,
-      "filter_stats": {
-        "pct_pass": 185,
-        "pct_fail": 133,
-        "liq_pass": 0,
-        "liq_fail": 0,
-        "total_signals": 318,
-        "filtered_signals": 133
-      },
-      "stop_counts": {
-        "rotate": 12,
-        "sig": 41,
-        "candle": 9,
-        "yellow": 1,
-        "final": 6
+        "rotate": 13,
+        "sig": 38,
+        "take": 5,
+        "candle": 4,
+        "trail": 3,
+        "peak": 4
       },
       "label": "Explosive_def2.0",
       "b2_name": "Explosive_def2.0"
     },
     {
-      "total_return_pct": 19.57222060000006,
-      "sharpe": 0.33463260488866814,
-      "n_trades": 69,
-      "n_signals": 69,
-      "win_rate": 0.30434782608695654,
-      "max_dd": 0.2708697372942003,
-      "final_value": 119572.22060000006,
-      "aggressive_buys": 21,
-      "defensive_buys": 0,
-      "normal_buys": 48,
+      "total_return_pct": 16.68344760000011,
+      "sharpe": 0.3443677216730683,
+      "n_trades": 62,
+      "n_signals": 61,
+      "win_rate": 0.3064516129032258,
+      "max_dd": 0.2374792465399787,
+      "final_value": 116683.44760000012,
+      "aggressive_buys": 14,
+      "defensive_buys": 1,
+      "normal_buys": 46,
       "filter_stats": {
-        "pct_pass": 185,
-        "pct_fail": 133,
+        "pct_pass": 153,
+        "pct_fail": 141,
         "liq_pass": 0,
         "liq_fail": 0,
-        "total_signals": 318,
-        "filtered_signals": 133
+        "total_signals": 294,
+        "filtered_signals": 141
       },
       "stop_counts": {
+        "sig": 35,
         "rotate": 12,
-        "sig": 41,
-        "candle": 9,
-        "yellow": 1,
-        "final": 6
+        "candle": 6,
+        "take": 4,
+        "peak": 3,
+        "trail": 2
       },
-      "label": "Explosive_SectorOff",
-      "b2_name": "Explosive_SectorOff"
+      "label": "OAMV_Conservative",
+      "b2_name": "OAMV_Conservative"
+    },
+    {
+      "total_return_pct": 28.32416310000012,
+      "sharpe": 0.5871362731969432,
+      "n_trades": 74,
+      "n_signals": 73,
+      "win_rate": 0.33783783783783783,
+      "max_dd": 0.23960005443886323,
+      "final_value": 128324.16310000012,
+      "aggressive_buys": 22,
+      "defensive_buys": 0,
+      "normal_buys": 51,
+      "filter_stats": {
+        "pct_pass": 190,
+        "pct_fail": 134,
+        "liq_pass": 0,
+        "liq_fail": 0,
+        "total_signals": 324,
+        "filtered_signals": 134
+      },
+      "stop_counts": {
+        "rotate": 15,
+        "sig": 44,
+        "take": 5,
+        "trail": 2,
+        "peak": 5,
+        "candle": 3
+      },
+      "label": "OAMV_Aggressive",
+      "b2_name": "OAMV_Aggressive"
     }
   ],
   "best_config": {
-    "b2_name": "OAMV_Aggressive"
+    "b2_name": "Explosive_def2.0"
   },
-  "elapsed_seconds": 7820.534576177597
+  "elapsed_seconds": 6090.096101284027
 }

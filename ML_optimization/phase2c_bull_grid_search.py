@@ -391,7 +391,7 @@ def _eval_stock_chunk_bull(args):
 
 
 def stage1_fast_screen(stock_files, oamv_df, param_sets, train_periods,
-                       n_workers=0):
+                       n_workers=0, sector_lookup_path=None):
     """Fast T+5 screening on concatenated bull periods.
     If n_workers=0, runs sequentially in main process (safer, less memory).
     If n_workers>=2, uses ProcessPoolExecutor (faster but may OOM on Windows)."""
