@@ -21,7 +21,7 @@ from tqdm import tqdm
 warnings.filterwarnings("ignore")
 
 # --------------------------- 全局日志配置 --------------------------- #
-LOG_FILE = Path("fetch.log")
+LOG_FILE = Path(__file__).parent / "fetch.log"
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(filename)s:%(lineno)d %(message)s",
@@ -72,7 +72,7 @@ def get_constituents(
 
     # 附加股票池 appendix.json
     try:
-        with open("appendix.json", "r", encoding="utf-8") as f:
+        with open(Path(__file__).parent / "appendix.json", "r", encoding="utf-8") as f:
             appendix_codes = json.load(f)["data"]
     except FileNotFoundError:
         appendix_codes = []

@@ -20,11 +20,11 @@ def update_one(args):
     code = path.stem
     try:
         # 1. Download via mootdx
-        raw = client.bars(symbol=code, frequency=9, start=0, offset=30)
+        raw = client.bars(symbol=code, frequency=9, start=0, offset=30, adjust='qfq')
         if raw is None or raw.empty:
             return (code, 0, 0)
         raw = raw.reset_index()
-        raw['date'] = pd.to_datetime(raw['datetime'])
+        raw['date'] = pd.to_datetime(raw['datetime']).dt.normalize()
         new = raw[(raw['date'] >= start_d) & (raw['date'] <= end_d)]
         if new.empty:
             return (code, 0, 0)

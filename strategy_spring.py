@@ -351,7 +351,10 @@ def generate_spring_entry_only(df: pd.DataFrame,
                                 board_type: str = 'main',
                                 params: dict = None) -> pd.DataFrame:
     """轻量版: 仅计算入场信号+权重, 跳过状态机 (实时信号专用, ~3x faster)."""
-    from quant_strategy.indicators import calc_all_indicators
+    try:
+        from quant_strategy.indicators import calc_all_indicators
+    except ImportError:
+        from indicators import calc_all_indicators
     df = calc_all_indicators(df, board_type=board_type)
 
     p = params or {}

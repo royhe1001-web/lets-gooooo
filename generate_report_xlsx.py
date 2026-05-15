@@ -105,7 +105,7 @@ def build_daily_from_trade_log():
     def _get_price(sym, dt):
         key = (sym, dt.date())
         if key not in _price_cache:
-            f = BACKTEST.parent / 'ML_optimization' / 'features' / f'{sym}.parquet'
+            f = ROOT / 'ML_optimization' / 'features' / f'{sym}.parquet'
             if f.exists():
                 df = pd.read_parquet(f, columns=['date', 'close'])
                 df['date'] = pd.to_datetime(df['date'])

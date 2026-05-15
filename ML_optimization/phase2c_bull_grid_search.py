@@ -1094,11 +1094,11 @@ def main():
         os.remove(oamv_tmp)
     except Exception:
         pass
-    if sector_tmp:
-        try:
+    try:
+        if sector_tmp:
             os.remove(sector_tmp)
-        except Exception:
-            pass
+    except (NameError, Exception):
+        pass
 
 
 if __name__ == '__main__':

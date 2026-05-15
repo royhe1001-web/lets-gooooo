@@ -8,7 +8,7 @@ b2 强势确认反转选股 —— 并行加速版
 
 import os, sys, time
 
-BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+BASE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, BASE)
 
 from quant_strategy.screener_engine import run_screen_parallel, get_code_list
